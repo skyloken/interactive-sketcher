@@ -70,10 +70,6 @@ class DecoderOnlyTransformer(tf.keras.Model):
         self, tar, training, look_ahead_mask
     ):
 
-        # enc_output = self.encoder(
-        #     inp, training, enc_padding_mask
-        # )  # (batch_size, inp_seq_len, d_model)
-
         # dec_output.shape == (batch_size, tar_seq_len, d_model)
         dec_output, attention_weights = self.decoder(
             tar, training, look_ahead_mask,
