@@ -330,11 +330,16 @@ class DecoderOnly(tf.keras.layers.Layer):
         target_vocab_size,
         maximum_position_encoding,
         rate=0.1,
+        use_embedding=True,
+        use_positional_encoding=True
     ):
         super(DecoderOnly, self).__init__()
 
         self.d_model = d_model
         self.num_layers = num_layers
+
+        self.use_embedding = use_embedding
+        self.use_positional_encoding = use_positional_encoding
 
         self.embedding = tf.keras.layers.Embedding(target_vocab_size, d_model)
         self.pos_encoding = positional_encoding(maximum_position_encoding, d_model)
@@ -349,9 +354,11 @@ class DecoderOnly(tf.keras.layers.Layer):
         seq_len = tf.shape(x)[1]
         attention_weights = {}
 
-        x = self.embedding(x)  # (batch_size, target_seq_len, d_model)
-        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
-        x += self.pos_encoding[:, :seq_len, :]
+        if self.use_embedding:
+            x = self.embedding(x)  # (batch_size, target_seq_len, d_model)
+        if self.use_positional_encoding:
+            x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
+            x += self.pos_encoding[:, :seq_len, :]
 
         x = self.dropout(x, training=training)
 
