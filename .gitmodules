@@ -1,0 +1,3 @@
+[submodule "sketchformer"]
+	path = sketchformer
+	url = https://github.com/skyloken/sketchformer.git
