@@ -1,11 +1,11 @@
 import sys
 
-sys.path.append("../sketchformer")
-
 import tensorflow as tf
 from basic_usage.sketchformer import continuous_embeddings
 
 from layers import DecoderOnly
+
+sys.path.append("../sketchformer")
 
 
 class InteractiveSketcher(tf.keras.Model):
@@ -21,10 +21,8 @@ class InteractiveSketcher(tf.keras.Model):
     ):
         super(InteractiveSketcher, self).__init__()
 
-        self.sketchformer = continuous_embeddings.get_pretrained_model()
-
         self.decoder = DecoderOnly(
-            num_layers, d_model, num_heads, dff, target_vocab_size, pe_target, rate, False, True
+            num_layers, d_model, num_heads, dff, target_vocab_size, pe_target, rate, False, False
         )
 
         self.final_layer = tf.keras.layers.Dense(target_vocab_size)
@@ -33,12 +31,9 @@ class InteractiveSketcher(tf.keras.Model):
         self, tar, training, look_ahead_mask
     ):
 
-        # sketch_embeddings == (tar_seq_len, 128)
-        sketch_embeddings = self.sketchformer.get_embeddings(tar)
-
         # dec_output.shape == (batch_size, tar_seq_len, d_model)
         dec_output, attention_weights = self.decoder(
-            sketch_embeddings, training, look_ahead_mask,
+            tar, training, look_ahead_mask,
         )
 
         final_output = self.final_layer(
