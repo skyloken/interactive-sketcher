@@ -9,7 +9,8 @@ def get_angles(pos, i, d_model):
 
 def positional_encoding(position, d_model):
     angle_rads = get_angles(
-        np.arange(position)[:, np.newaxis], np.arange(d_model)[np.newaxis, :], d_model
+        np.arange(position)[:, np.newaxis], np.arange(
+            d_model)[np.newaxis, :], d_model
     )
 
     # 配列中の偶数インデックスにはsinを適用; 2i
@@ -21,14 +22,6 @@ def positional_encoding(position, d_model):
     pos_encoding = angle_rads[np.newaxis, ...]
 
     return tf.cast(pos_encoding, dtype=tf.float32)
-
-
-def create_padding_mask(seq):
-    seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
-
-    # アテンション・ロジットにパディングを追加するため
-    # さらに次元を追加する
-    return seq[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, 1, seq_len)
 
 
 def scaled_dot_product_attention(q, k, v, mask):
@@ -48,7 +41,8 @@ def scaled_dot_product_attention(q, k, v, mask):
       出力、アテンションの重み
     """
 
-    matmul_qk = tf.matmul(q, k, transpose_b=True)  # (..., seq_len_q, seq_len_k)
+    # (..., seq_len_q, seq_len_k)
+    matmul_qk = tf.matmul(q, k, transpose_b=True)
 
     # matmul_qkをスケール
     dk = tf.cast(tf.shape(k)[-1], tf.float32)
@@ -99,9 +93,12 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         k = self.wk(k)  # (batch_size, seq_len, d_model)
         v = self.wv(v)  # (batch_size, seq_len, d_model)
 
-        q = self.split_heads(q, batch_size)  # (batch_size, num_heads, seq_len_q, depth)
-        k = self.split_heads(k, batch_size)  # (batch_size, num_heads, seq_len_k, depth)
-        v = self.split_heads(v, batch_size)  # (batch_size, num_heads, seq_len_v, depth)
+        # (batch_size, num_heads, seq_len_q, depth)
+        q = self.split_heads(q, batch_size)
+        # (batch_size, num_heads, seq_len_k, depth)
+        k = self.split_heads(k, batch_size)
+        # (batch_size, num_heads, seq_len_v, depth)
+        v = self.split_heads(v, batch_size)
 
         # scaled_attention.shape == (batch_size, num_heads, seq_len_q, depth)
         # attention_weights.shape == (batch_size, num_heads, seq_len_q, seq_len_k)
@@ -117,7 +114,8 @@ class MultiHeadAttention(tf.keras.layers.Layer):
             scaled_attention, (batch_size, -1, self.d_model)
         )  # (batch_size, seq_len_q, d_model)
 
-        output = self.dense(concat_attention)  # (batch_size, seq_len_q, d_model)
+        # (batch_size, seq_len_q, d_model)
+        output = self.dense(concat_attention)
 
         return output, attention_weights
 
@@ -125,7 +123,8 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 def point_wise_feed_forward_network(d_model, dff):
     return tf.keras.Sequential(
         [
-            tf.keras.layers.Dense(dff, activation="relu"),  # (batch_size, seq_len, dff)
+            # (batch_size, seq_len, dff)
+            tf.keras.layers.Dense(dff, activation="relu"),
             tf.keras.layers.Dense(d_model),  # (batch_size, seq_len, d_model)
         ]
     )
@@ -146,9 +145,11 @@ class EncoderLayer(tf.keras.layers.Layer):
 
     def call(self, x, training, mask):
 
-        attn_output, _ = self.mha(x, x, x, mask)  # (batch_size, input_seq_len, d_model)
+        # (batch_size, input_seq_len, d_model)
+        attn_output, _ = self.mha(x, x, x, mask)
         attn_output = self.dropout1(attn_output, training=training)
-        out1 = self.layernorm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
+        # (batch_size, input_seq_len, d_model)
+        out1 = self.layernorm1(x + attn_output)
 
         ffn_output = self.ffn(out1)  # (batch_size, input_seq_len, d_model)
         ffn_output = self.dropout2(ffn_output, training=training)
@@ -176,7 +177,8 @@ class Encoder(tf.keras.layers.Layer):
         self.num_layers = num_layers
 
         self.embedding = tf.keras.layers.Embedding(input_vocab_size, d_model)
-        self.pos_encoding = positional_encoding(maximum_position_encoding, self.d_model)
+        self.pos_encoding = positional_encoding(
+            maximum_position_encoding, self.d_model)
 
         self.enc_layers = [
             EncoderLayer(d_model, num_heads, dff, rate) for _ in range(num_layers)
@@ -231,7 +233,8 @@ class DecoderLayer(tf.keras.layers.Layer):
             enc_output, enc_output, out1, padding_mask
         )  # (batch_size, target_seq_len, d_model)
         attn2 = self.dropout2(attn2, training=training)
-        out2 = self.layernorm2(attn2 + out1)  # (batch_size, target_seq_len, d_model)
+        # (batch_size, target_seq_len, d_model)
+        out2 = self.layernorm2(attn2 + out1)
 
         ffn_output = self.ffn(out2)  # (batch_size, target_seq_len, d_model)
         ffn_output = self.dropout3(ffn_output, training=training)
@@ -259,7 +262,8 @@ class Decoder(tf.keras.layers.Layer):
         self.num_layers = num_layers
 
         self.embedding = tf.keras.layers.Embedding(target_vocab_size, d_model)
-        self.pos_encoding = positional_encoding(maximum_position_encoding, d_model)
+        self.pos_encoding = positional_encoding(
+            maximum_position_encoding, d_model)
 
         self.dec_layers = [
             DecoderLayer(d_model, num_heads, dff, rate) for _ in range(num_layers)
@@ -320,6 +324,7 @@ class DecoderOnlyLayer(tf.keras.layers.Layer):
 
         return out2, attn_weights_block
 
+
 class DecoderOnly(tf.keras.layers.Layer):
     def __init__(
         self,
@@ -342,7 +347,8 @@ class DecoderOnly(tf.keras.layers.Layer):
         self.use_positional_encoding = use_positional_encoding
 
         self.embedding = tf.keras.layers.Embedding(target_vocab_size, d_model)
-        self.pos_encoding = positional_encoding(maximum_position_encoding, d_model)
+        self.pos_encoding = positional_encoding(
+            maximum_position_encoding, d_model)
 
         self.dec_layers = [
             DecoderOnlyLayer(d_model, num_heads, dff, rate) for _ in range(num_layers)

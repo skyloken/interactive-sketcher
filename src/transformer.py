@@ -47,6 +47,7 @@ class Transformer(tf.keras.Model):
 
         return final_output, attention_weights
 
+
 class DecoderOnlyTransformer(tf.keras.Model):
     def __init__(
         self,

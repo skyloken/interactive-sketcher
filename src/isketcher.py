@@ -22,7 +22,7 @@ class InteractiveSketcher(tf.keras.Model):
         super(InteractiveSketcher, self).__init__()
 
         self.decoder = DecoderOnly(
-            num_layers, d_model, num_heads, dff, target_vocab_size, pe_target, rate, False, False
+            num_layers, d_model, num_heads, dff, target_vocab_size, pe_target, rate, False, True
         )
 
         self.final_layer = tf.keras.layers.Dense(target_vocab_size)
