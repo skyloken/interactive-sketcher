@@ -1,11 +1,6 @@
-import sys
-
 import tensorflow as tf
-from basic_usage.sketchformer import continuous_embeddings
 
 from layers import DecoderOnly
-
-sys.path.append("../sketchformer")
 
 
 class InteractiveSketcher(tf.keras.Model):
@@ -15,17 +10,20 @@ class InteractiveSketcher(tf.keras.Model):
         d_model,
         num_heads,
         dff,
-        target_vocab_size,
+        object_num,
         pe_target,
         rate=0.1,
     ):
         super(InteractiveSketcher, self).__init__()
 
+        self.object_num = object_num
+
         self.decoder = DecoderOnly(
-            num_layers, d_model, num_heads, dff, target_vocab_size, pe_target, rate, False, True
+            num_layers, d_model, num_heads, dff, object_num, pe_target, rate, False, True
         )
 
-        self.final_layer = tf.keras.layers.Dense(target_vocab_size)
+        self.final_layer = tf.keras.layers.Dense(
+            object_num + 2)  # OBJECT_NUM (40) + POSITION (2)
 
     def call(
         self, tar, training, look_ahead_mask
@@ -38,6 +36,10 @@ class InteractiveSketcher(tf.keras.Model):
 
         final_output = self.final_layer(
             dec_output
-        )  # (batch_size, tar_seq_len, target_vocab_size)
+        )  # (batch_size, tar_seq_len, object_num + x + y)
 
-        return final_output, attention_weights
+        c_output = tf.nn.softmax(final_output[:, :, :self.object_num])
+        x_output = tf.math.sigmoid(final_output[:, :, -2])
+        y_output = tf.math.sigmoid(final_output[:, :, -1])
+
+        return c_output, x_output, y_output, attention_weights
