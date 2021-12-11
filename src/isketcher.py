@@ -19,7 +19,7 @@ class InteractiveSketcher(tf.keras.Model):
         self.object_num = object_num
 
         self.decoder = DecoderOnly(
-            num_layers, d_model, num_heads, dff, object_num, pe_target, rate, False, True
+            num_layers, d_model, num_heads, dff, object_num, pe_target, rate, False, False
         )
 
         self.final_layer = tf.keras.layers.Dense(
