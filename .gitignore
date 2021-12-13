@@ -204,3 +204,5 @@ Thumbs.db
 .quickdrawcache/
 .vscode/
 checkpoints/
+logs/
+*.log
