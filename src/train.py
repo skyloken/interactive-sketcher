@@ -12,10 +12,9 @@ sys.path.append("../sketchformer")
 
 
 # HParams
-HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([8, 16, 32, 64]))
-HP_NUM_LAYERS = hp.HParam('num_units', hp.Discrete([6, 12, 24, 48]))
-HP_DFF = hp.HParam('dff', hp.Discrete([512, 1024, 2048, 4096]))
-HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([5, 10, 13, 26]))
+HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([6, 12, 24]))
+HP_DFF = hp.HParam('dff', hp.Discrete([1024, 2048, 4096]))
+HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([5, 10, 13]))
 
 METRIC_LOSS = 'loss/train'
 METRIC_VAL_LOSS = 'loss/valid'
@@ -24,7 +23,7 @@ METRIC_VAL_ACC = 'acc/valid'
 
 with tf.summary.create_file_writer('logs/hparam_tuning').as_default():
     hp.hparams_config(
-        hparams=[HP_BATCH_SIZE, HP_NUM_LAYERS, HP_DFF, HP_NUM_HEADS],
+        hparams=[HP_NUM_LAYERS, HP_DFF, HP_NUM_HEADS],
         metrics=[hp.Metric(METRIC_LOSS, display_name='loss'),
                  hp.Metric(METRIC_VAL_LOSS, display_name='val_loss'),
                  hp.Metric(METRIC_ACC, display_name='acc'),
@@ -123,11 +122,12 @@ def batch(iterable, n=1):
         yield iterable[ndx: min(ndx + n, l)]
 
 
-def run(run_dir, run_name, hparams):
+def run(run_dir, run_name, hparams, dataset):
 
     # hyper parameters
-    EPOCHS = 1
-    # BATCH_SIZE = 16
+    EPOCHS = 50
+    BATCH_SIZE = 16
+
     # num_layers = 6
     # dff = 2048
     # num_heads = 10
@@ -171,7 +171,6 @@ def run(run_dir, run_name, hparams):
         name='valid_class_accuracy')
 
     # load dataset
-    dataset = np.load('../data/isketcher/dataset.npz')
     x_train, y_train = dataset['x_train'], dataset['y_train']
     x_valid, y_valid = dataset['x_valid'], dataset['y_valid']
 
@@ -187,7 +186,7 @@ def run(run_dir, run_name, hparams):
         valid_accuracy.reset_states()
 
         # train
-        for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, hparams[HP_BATCH_SIZE]), batch(y_train, hparams[HP_BATCH_SIZE]))):
+        for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, hparams[BATCH_SIZE]), batch(y_train, hparams[BATCH_SIZE]))):
             train_step(interactive_sketcher, optimizer, x_batch,
                        y_batch, train_loss, train_accuracy)
 
@@ -223,23 +222,23 @@ def run(run_dir, run_name, hparams):
 
 def main():
 
+    dataset = np.load('../data/isketcher/dataset.npz')
+
     session_num = 0
 
-    for batch_size in HP_BATCH_SIZE.domain.values:
-        for num_layers in HP_NUM_LAYERS.domain.values:
-            for dff in HP_DFF.domain.values:
-                for num_heads in HP_NUM_HEADS.domain.values:
-                    hparams = {
-                        HP_BATCH_SIZE: batch_size,
-                        HP_NUM_LAYERS: num_layers,
-                        HP_DFF: dff,
-                        HP_NUM_HEADS: num_heads,
-                    }
-                    run_name = "run-%d" % session_num
-                    print('--- Starting trial: %s' % run_name)
-                    print({h.name: hparams[h] for h in hparams})
-                    run('logs/hparam_tuning/' + run_name, run_name, hparams)
-                    session_num += 1
+    for num_layers in HP_NUM_LAYERS.domain.values:
+        for dff in HP_DFF.domain.values:
+            for num_heads in HP_NUM_HEADS.domain.values:
+                hparams = {
+                    HP_NUM_LAYERS: num_layers,
+                    HP_DFF: dff,
+                    HP_NUM_HEADS: num_heads,
+                }
+                run_name = "run-%d" % session_num
+                print('--- Starting trial: %s' % run_name)
+                print({h.name: hparams[h] for h in hparams})
+                run('logs/hparam_tuning/' + run_name, run_name, hparams, dataset)
+                session_num += 1
 
 
 if __name__ == "__main__":
