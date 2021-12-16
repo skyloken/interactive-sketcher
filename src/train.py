@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 import tensorflow as tf
+from tensorboard.plugins.hparams import api as hp
 
 from isketcher import InteractiveSketcher
 from mask import create_combined_mask
@@ -10,17 +11,25 @@ from mask import create_combined_mask
 sys.path.append("../sketchformer")
 
 
-# hyper parameters
-num_layers = 4
-d_model = 130
-dff = 512
-num_heads = 5
+# HParams
+HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([8, 16, 32, 64]))
+HP_NUM_LAYERS = hp.HParam('num_units', hp.Discrete([6, 12, 24, 48]))
+HP_DFF = hp.HParam('dff', hp.Discrete([512, 1024, 2048, 4096]))
+HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([5, 10, 13, 26]))
 
-target_object_num = 40  # object num
-dropout_rate = 0.1
+METRIC_LOSS = 'loss/train'
+METRIC_VAL_LOSS = 'loss/valid'
+METRIC_ACC = 'acc/train'
+METRIC_VAL_ACC = 'acc/valid'
 
-EPOCHS = 100
-BATCH_SIZE = 16
+with tf.summary.create_file_writer('logs/hparam_tuning').as_default():
+    hp.hparams_config(
+        hparams=[HP_BATCH_SIZE, HP_NUM_LAYERS, HP_DFF, HP_NUM_HEADS],
+        metrics=[hp.Metric(METRIC_LOSS, display_name='loss'),
+                 hp.Metric(METRIC_VAL_LOSS, display_name='val_loss'),
+                 hp.Metric(METRIC_ACC, display_name='acc'),
+                 hp.Metric(METRIC_VAL_ACC, display_name='val_acc')],
+    )
 
 
 class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
@@ -39,47 +48,10 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
         return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
 
 
-learning_rate = CustomSchedule(d_model)
-
-optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98,
-                                     epsilon=1e-9)
-
-# create model
-interactive_sketcher = InteractiveSketcher(
-    num_layers=num_layers, d_model=d_model, num_heads=num_heads, dff=dff,
-    object_num=target_object_num, pe_target=100, rate=dropout_rate)
-
-
-# checkpoint
-checkpoint_path = "./checkpoints/train"
-
-ckpt = tf.train.Checkpoint(epoch=tf.Variable(1),
-                           transformer=interactive_sketcher,
-                           optimizer=optimizer)
-
-ckpt_manager = tf.train.CheckpointManager(ckpt, checkpoint_path, max_to_keep=5)
-
-# チェックポイントが存在したなら、最後のチェックポイントを復元
-if ckpt_manager.latest_checkpoint:
-    ckpt.restore(ckpt_manager.latest_checkpoint)
-    print('Latest checkpoint restored!!')
-
-
-scc = tf.keras.losses.SparseCategoricalCrossentropy(
-    reduction=tf.keras.losses.Reduction.NONE)
-mse = tf.keras.losses.MeanSquaredError(
-    reduction=tf.keras.losses.Reduction.NONE)
-
-train_loss = tf.keras.metrics.Mean(name='train_loss')
-train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
-    name='train_class_accuracy')
-
-valid_loss = tf.keras.metrics.Mean(name='valid_loss')
-valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
-    name='valid_class_accuracy')
-
-
 def loss_function(c_real, x_real, y_real, c_pred, x_pred, y_pred):
+    scc = tf.keras.losses.SparseCategoricalCrossentropy(
+        reduction=tf.keras.losses.Reduction.NONE)
+
     # class loss
     # クラスラベルはカテゴリカルクロスエントロピー
     c_loss_ = scc(c_real, c_pred)
@@ -100,7 +72,7 @@ def loss_function(c_real, x_real, y_real, c_pred, x_pred, y_pred):
     return c_loss + p_loss
 
 
-def train_step(tar, labels):
+def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_accuracy):
     tar_inp = tar[:, :-1]
     tar_real = tar[:, 1:]
     x_real, y_real = tar_real[:, :, -2], tar_real[:, :, -1]
@@ -125,7 +97,7 @@ def train_step(tar, labels):
     train_accuracy(labels_real, c_out)
 
 
-def valid_step(tar, labels):
+def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_accuracy):
     tar_inp = tar[:, :-1]
     tar_real = tar[:, 1:]
     x_real, y_real = tar_real[:, :, -2], tar_real[:, :, -1]
@@ -151,15 +123,60 @@ def batch(iterable, n=1):
         yield iterable[ndx: min(ndx + n, l)]
 
 
-def main():
+def run(run_dir, run_name, hparams):
+
+    # hyper parameters
+    EPOCHS = 1
+    # BATCH_SIZE = 16
+    # num_layers = 6
+    # dff = 2048
+    # num_heads = 10
+    dropout_rate = 0.1
+
+    # constant
+    d_model = 130
+    target_object_num = 40  # object num
+
+    # optimizer
+    learning_rate = CustomSchedule(d_model)
+    optimizer = tf.keras.optimizers.Adam(learning_rate, beta_1=0.9, beta_2=0.98,
+                                         epsilon=1e-9)
+
+    # create model
+    interactive_sketcher = InteractiveSketcher(
+        num_layers=hparams[HP_NUM_LAYERS], d_model=d_model, num_heads=hparams[HP_NUM_HEADS], dff=hparams[HP_DFF],
+        object_num=target_object_num, pe_target=100, rate=dropout_rate)
+
+    # checkpoint
+    checkpoint_path = f"./checkpoints/{run_name}"
+
+    ckpt = tf.train.Checkpoint(epoch=tf.Variable(1),
+                               transformer=interactive_sketcher,
+                               optimizer=optimizer)
+
+    ckpt_manager = tf.train.CheckpointManager(
+        ckpt, checkpoint_path, max_to_keep=5)
+
+    if ckpt_manager.latest_checkpoint:
+        ckpt.restore(ckpt_manager.latest_checkpoint)
+        print('Latest checkpoint restored!!')
+
+    # metrics
+    train_loss = tf.keras.metrics.Mean(name='train_loss')
+    train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
+        name='train_class_accuracy')
+
+    valid_loss = tf.keras.metrics.Mean(name='valid_loss')
+    valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
+        name='valid_class_accuracy')
+
     # load dataset
     dataset = np.load('../data/isketcher/dataset.npz')
     x_train, y_train = dataset['x_train'], dataset['y_train']
     x_valid, y_valid = dataset['x_valid'], dataset['y_valid']
 
     # tensorboard
-    train_summary_writer = tf.summary.create_file_writer('logs/train')
-    valid_summary_writer = tf.summary.create_file_writer('logs/valid')
+    summary_writer = tf.summary.create_file_writer(run_dir)
 
     for epoch in range(int(ckpt.epoch), EPOCHS + int(ckpt.epoch)):
         start = time.time()
@@ -170,33 +187,59 @@ def main():
         valid_accuracy.reset_states()
 
         # train
-        for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, BATCH_SIZE), batch(y_train, BATCH_SIZE))):
-            train_step(x_batch, y_batch)
+        for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, hparams[HP_BATCH_SIZE]), batch(y_train, hparams[HP_BATCH_SIZE]))):
+            train_step(interactive_sketcher, optimizer, x_batch,
+                       y_batch, train_loss, train_accuracy)
 
             if (i + 1) % 100 == 0:
-                print('Epoch {} Batch {} Loss {:.4f} Accuracy {:.4f}'.format(
+                print('Epoch {}, Batch {}, Loss {:.4f}, Accuracy {:.4f}'.format(
                     epoch, i + 1, train_loss.result(), train_accuracy.result()))
 
-        with train_summary_writer.as_default():
-            tf.summary.scalar('loss', train_loss.result(), step=epoch)
-            tf.summary.scalar('accuracy', train_accuracy.result(), step=epoch)
-
         # valid
-        valid_step(x_valid, y_valid)
+        valid_step(interactive_sketcher, x_valid,
+                   y_valid, valid_loss, valid_accuracy)
 
-        with valid_summary_writer.as_default():
-            tf.summary.scalar('loss', valid_loss.result(), step=epoch)
-            tf.summary.scalar('accuracy', valid_accuracy.result(), step=epoch)
+        with summary_writer.as_default():
+            tf.summary.scalar(METRIC_LOSS, train_loss.result(), step=epoch)
+            tf.summary.scalar(METRIC_ACC, train_accuracy.result(), step=epoch)
+            tf.summary.scalar(METRIC_VAL_LOSS, valid_loss.result(), step=epoch)
+            tf.summary.scalar(
+                METRIC_VAL_ACC, valid_accuracy.result(), step=epoch)
 
         ckpt.epoch.assign_add(1)
         if epoch % 1 == 0:
             ckpt_save_path = ckpt_manager.save()
-            print('Saving checkpoint for epoch {} at {}'.format(epoch, ckpt_save_path))
+            print('Saving checkpoint for epoch {} at {}'.format(
+                epoch, ckpt_save_path))
 
-        print('Epoch {} Loss {:.4f} Accuracy {:.4f} Valid_Loss {:.4f} Valid_Accuracy {:.4f}'.format(
+        print('Epoch {}, Loss {:.4f}, Accuracy {:.4f}, Valid Loss {:.4f}, Valid Accuracy {:.4f}'.format(
             epoch, train_loss.result(), train_accuracy.result(), valid_loss.result(), valid_accuracy.result()))
 
         print('Time taken for 1 epoch: {} secs\n'.format(time.time() - start))
+
+    with summary_writer.as_default():
+        hp.hparams(hparams)
+
+
+def main():
+
+    session_num = 0
+
+    for batch_size in HP_BATCH_SIZE.domain.values:
+        for num_layers in HP_NUM_LAYERS.domain.values:
+            for dff in HP_DFF.domain.values:
+                for num_heads in HP_NUM_HEADS.domain.values:
+                    hparams = {
+                        HP_BATCH_SIZE: batch_size,
+                        HP_NUM_LAYERS: num_layers,
+                        HP_DFF: dff,
+                        HP_NUM_HEADS: num_heads,
+                    }
+                    run_name = "run-%d" % session_num
+                    print('--- Starting trial: %s' % run_name)
+                    print({h.name: hparams[h] for h in hparams})
+                    run('logs/hparam_tuning/' + run_name, run_name, hparams)
+                    session_num += 1
 
 
 if __name__ == "__main__":
