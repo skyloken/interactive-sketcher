@@ -1,3 +1,4 @@
+import datetime
 import sys
 import time
 
@@ -21,7 +22,10 @@ METRIC_VAL_LOSS = 'loss/valid'
 METRIC_ACC = 'acc/train'
 METRIC_VAL_ACC = 'acc/valid'
 
-with tf.summary.create_file_writer('logs/hparam_tuning').as_default():
+current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+log_dir = f"./logs/{current_time}"
+
+with tf.summary.create_file_writer(log_dir).as_default():
     hp.hparams_config(
         hparams=[HP_NUM_LAYERS, HP_DFF, HP_NUM_HEADS],
         metrics=[hp.Metric(METRIC_LOSS, display_name='loss'),
@@ -92,8 +96,9 @@ def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_a
     optimizer.apply_gradients(
         zip(gradients, interactive_sketcher.trainable_variables))
 
+    mask = tf.math.logical_not(tf.math.equal(labels_real, 0))
     train_loss(loss)
-    train_accuracy(labels_real, c_out)
+    train_accuracy(labels_real, c_out, sample_weight=mask)
 
 
 def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_accuracy):
@@ -112,8 +117,9 @@ def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_accuracy):
 
     loss = loss_function(labels_real, x_real, y_real, c_out, x_out, y_out)
 
+    mask = tf.math.logical_not(tf.math.equal(labels_real, 0))
     valid_loss(loss)
-    valid_accuracy(labels_real, c_out)
+    valid_accuracy(labels_real, c_out, sample_weight=mask)
 
 
 def batch(iterable, n=1):
@@ -122,11 +128,11 @@ def batch(iterable, n=1):
         yield iterable[ndx: min(ndx + n, l)]
 
 
-def run(run_dir, run_name, hparams, dataset):
+def run(run_dir, hparams, dataset):
 
     # hyper parameters
     EPOCHS = 50
-    BATCH_SIZE = 16
+    BATCH_SIZE = 32
 
     # num_layers = 6
     # dff = 2048
@@ -135,7 +141,7 @@ def run(run_dir, run_name, hparams, dataset):
 
     # constant
     d_model = 130
-    target_object_num = 40  # object num
+    target_object_num = 41  # object num, オブジェクト数は40だがID=0があるため+1
 
     # optimizer
     learning_rate = CustomSchedule(d_model)
@@ -148,7 +154,7 @@ def run(run_dir, run_name, hparams, dataset):
         object_num=target_object_num, pe_target=100, rate=dropout_rate)
 
     # checkpoint
-    checkpoint_path = f"./checkpoints/{run_name}"
+    checkpoint_path = "./checkpoints"
 
     ckpt = tf.train.Checkpoint(epoch=tf.Variable(1),
                                transformer=interactive_sketcher,
@@ -157,9 +163,9 @@ def run(run_dir, run_name, hparams, dataset):
     ckpt_manager = tf.train.CheckpointManager(
         ckpt, checkpoint_path, max_to_keep=5)
 
-    if ckpt_manager.latest_checkpoint:
-        ckpt.restore(ckpt_manager.latest_checkpoint)
-        print('Latest checkpoint restored!!')
+    # if ckpt_manager.latest_checkpoint:
+    #     ckpt.restore(ckpt_manager.latest_checkpoint)
+    #     print('Latest checkpoint restored!!')
 
     # metrics
     train_loss = tf.keras.metrics.Mean(name='train_loss')
@@ -177,6 +183,10 @@ def run(run_dir, run_name, hparams, dataset):
     # tensorboard
     summary_writer = tf.summary.create_file_writer(run_dir)
 
+    # tf.function
+    train_step_ = tf.function(train_step)
+    valid_step_ = tf.function(valid_step)
+
     for epoch in range(int(ckpt.epoch), EPOCHS + int(ckpt.epoch)):
         start = time.time()
 
@@ -186,16 +196,16 @@ def run(run_dir, run_name, hparams, dataset):
         valid_accuracy.reset_states()
 
         # train
-        for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, hparams[BATCH_SIZE]), batch(y_train, hparams[BATCH_SIZE]))):
-            train_step(interactive_sketcher, optimizer, x_batch,
+        for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, BATCH_SIZE), batch(y_train, BATCH_SIZE))):
+            train_step_(interactive_sketcher, optimizer, x_batch,
                        y_batch, train_loss, train_accuracy)
 
-            if (i + 1) % 100 == 0:
+            if (i + 1) % 50 == 0:
                 print('Epoch {}, Batch {}, Loss {:.4f}, Accuracy {:.4f}'.format(
                     epoch, i + 1, train_loss.result(), train_accuracy.result()))
 
         # valid
-        valid_step(interactive_sketcher, x_valid,
+        valid_step_(interactive_sketcher, x_valid,
                    y_valid, valid_loss, valid_accuracy)
 
         with summary_writer.as_default():
@@ -225,7 +235,6 @@ def main():
     dataset = np.load('../data/isketcher/dataset.npz')
 
     session_num = 0
-
     for num_layers in HP_NUM_LAYERS.domain.values:
         for dff in HP_DFF.domain.values:
             for num_heads in HP_NUM_HEADS.domain.values:
@@ -237,7 +246,7 @@ def main():
                 run_name = "run-%d" % session_num
                 print('--- Starting trial: %s' % run_name)
                 print({h.name: hparams[h] for h in hparams})
-                run('logs/hparam_tuning/' + run_name, run_name, hparams, dataset)
+                run(f'{log_dir}/{run_name}', hparams, dataset)
                 session_num += 1
 
 
