@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from layers import DecoderOnly
+from layers import DecoderOnlyForSketcher
 
 
 class InteractiveSketcher(tf.keras.Model):
@@ -11,19 +11,16 @@ class InteractiveSketcher(tf.keras.Model):
         num_heads,
         dff,
         object_num,
-        pe_target,
         rate=0.1,
     ):
         super(InteractiveSketcher, self).__init__()
 
         self.object_num = object_num
 
-        self.decoder = DecoderOnly(
-            num_layers, d_model, num_heads, dff, object_num, pe_target, rate, False, False
-        )
+        self.decoder = DecoderOnlyForSketcher(
+            num_layers, d_model, num_heads, dff, rate)
 
-        self.final_layer = tf.keras.layers.Dense(
-            object_num + 2)  # OBJECT_NUM (40) + POSITION (2)
+        self.final_layer = tf.keras.layers.Dense(object_num + 2)
 
     def call(
         self, tar, training, look_ahead_mask

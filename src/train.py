@@ -13,9 +13,11 @@ sys.path.append("../sketchformer")
 
 
 # HParams
-HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([16, 32, 64]))
-HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([4, 6, 8]))
-HP_DFF = hp.HParam('dff', hp.Discrete([256, 512, 1024]))
+HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([32]))
+HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([6, 12]))
+HP_D_MODEL = hp.HParam('d_model', hp.Discrete([512]))
+HP_DFF = hp.HParam('dff', hp.Discrete([512, 1024, 2048]))
+HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([8]))
 
 METRIC_LOSS = 'loss/train'
 METRIC_VAL_LOSS = 'loss/valid'
@@ -29,7 +31,8 @@ log_dir = f"./logs/{current_time}"
 
 with tf.summary.create_file_writer(log_dir).as_default():
     hp.hparams_config(
-        hparams=[HP_BATCH_SIZE, HP_NUM_LAYERS, HP_DFF],
+        hparams=[HP_BATCH_SIZE, HP_NUM_LAYERS,
+                 HP_D_MODEL, HP_DFF, HP_NUM_HEADS],
         metrics=[hp.Metric(METRIC_LOSS, display_name='loss'),
                  hp.Metric(METRIC_VAL_LOSS, display_name='val_loss'),
                  hp.Metric(METRIC_ACC, display_name='acc'),
@@ -132,18 +135,15 @@ def run(run_dir, hparams, dataset):
 
     # hyper parameters
     EPOCHS = 50
-    # BATCH_SIZE = 32
     BATCH_SIZE = hparams[HP_BATCH_SIZE]
 
-    # num_layers = 6
     num_layers = hparams[HP_NUM_LAYERS]
-    # dff = 2048
+    d_model = hparams[HP_D_MODEL]
     dff = hparams[HP_DFF]
-    num_heads = 5
+    num_heads = hparams[HP_NUM_HEADS]
     dropout_rate = 0.1
 
     # constant
-    d_model = 130
     target_object_num = 41  # object num, オブジェクト数は40だがID=0があるため+1
 
     # optimizer
@@ -154,7 +154,7 @@ def run(run_dir, hparams, dataset):
     # create model
     interactive_sketcher = InteractiveSketcher(
         num_layers=num_layers, d_model=d_model, num_heads=num_heads, dff=dff,
-        object_num=target_object_num, pe_target=100, rate=dropout_rate)
+        object_num=target_object_num, rate=dropout_rate)
 
     # checkpoint
     checkpoint_path = "./checkpoints"
@@ -246,19 +246,23 @@ def main():
     dataset = np.load('../data/isketcher/dataset.npz')
 
     session_num = 0
-    for num_layers in HP_NUM_LAYERS.domain.values:
-        for dff in HP_DFF.domain.values:
-            for batch_size in HP_BATCH_SIZE.domain.values:
-                hparams = {
-                    HP_NUM_LAYERS: num_layers,
-                    HP_DFF: dff,
-                    HP_BATCH_SIZE: batch_size,
-                }
-                run_name = "run-%d" % session_num
-                print('--- Starting trial: %s' % run_name)
-                print({h.name: hparams[h] for h in hparams})
-                run(f'{log_dir}/{run_name}', hparams, dataset)
-                session_num += 1
+    for batch_size in HP_BATCH_SIZE.domain.values:
+        for num_layers in HP_NUM_LAYERS.domain.values:
+            for d_model in HP_D_MODEL.domain.values:
+                for dff in HP_DFF.domain.values:
+                    for num_heads in HP_NUM_HEADS.domain.values:
+                        hparams = {
+                            HP_BATCH_SIZE: batch_size,
+                            HP_NUM_LAYERS: num_layers,
+                            HP_D_MODEL: d_model,
+                            HP_DFF: dff,
+                            HP_NUM_HEADS: num_heads
+                        }
+                        run_name = "run-%d" % session_num
+                        print('--- Starting trial: %s' % run_name)
+                        print({h.name: hparams[h] for h in hparams})
+                        run(f'{log_dir}/{run_name}', hparams, dataset)
+                        session_num += 1
 
 
 if __name__ == "__main__":

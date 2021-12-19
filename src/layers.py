@@ -334,17 +334,12 @@ class DecoderOnly(tf.keras.layers.Layer):
         dff,
         target_vocab_size,
         maximum_position_encoding,
-        rate=0.1,
-        use_embedding=True,
-        use_positional_encoding=True
+        rate=0.1
     ):
         super(DecoderOnly, self).__init__()
 
         self.d_model = d_model
         self.num_layers = num_layers
-
-        self.use_embedding = use_embedding
-        self.use_positional_encoding = use_positional_encoding
 
         self.embedding = tf.keras.layers.Embedding(target_vocab_size, d_model)
         self.pos_encoding = positional_encoding(
@@ -360,12 +355,49 @@ class DecoderOnly(tf.keras.layers.Layer):
         seq_len = tf.shape(x)[1]
         attention_weights = {}
 
-        if self.use_embedding:
-            x = self.embedding(x)  # (batch_size, target_seq_len, d_model)
-        if self.use_positional_encoding:
-            x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
-            x += self.pos_encoding[:, :seq_len, :]
+        x = self.embedding(x)  # (batch_size, target_seq_len, d_model)
+        x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
+        x += self.pos_encoding[:, :seq_len, :]
 
+        x = self.dropout(x, training=training)
+
+        for i in range(self.num_layers):
+            x, block = self.dec_layers[i](
+                x, training, look_ahead_mask
+            )
+
+            attention_weights["decoder_layer{}".format(i + 1)] = block
+
+        # x.shape == (batch_size, target_seq_len, d_model)
+        return x, attention_weights
+
+
+class DecoderOnlyForSketcher(tf.keras.layers.Layer):
+    def __init__(
+        self,
+        num_layers,
+        d_model,
+        num_heads,
+        dff,
+        rate=0.1,
+    ):
+        super(DecoderOnlyForSketcher, self).__init__()
+
+        self.d_model = d_model
+        self.num_layers = num_layers
+
+        self.ffn = tf.keras.layers.Dense(d_model)
+
+        self.dec_layers = [
+            DecoderOnlyLayer(d_model, num_heads, dff, rate) for _ in range(num_layers)
+        ]
+        self.dropout = tf.keras.layers.Dropout(rate)
+
+    def call(self, x, training, look_ahead_mask):
+
+        attention_weights = {}
+
+        x = self.ffn(x)
         x = self.dropout(x, training=training)
 
         for i in range(self.num_layers):
