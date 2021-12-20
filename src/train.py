@@ -13,11 +13,11 @@ sys.path.append("../sketchformer")
 
 
 # HParams
-HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([32]))
-HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([6, 12]))
-HP_D_MODEL = hp.HParam('d_model', hp.Discrete([512]))
-HP_DFF = hp.HParam('dff', hp.Discrete([512, 1024, 2048]))
-HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([8]))
+HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([64]))
+HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([8]))
+HP_D_MODEL = hp.HParam('d_model', hp.Discrete([64]))
+HP_DFF = hp.HParam('dff', hp.Discrete([128]))
+HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([4]))
 
 METRIC_LOSS = 'loss/train'
 METRIC_VAL_LOSS = 'loss/valid'
@@ -142,6 +142,7 @@ def run(run_dir, hparams, dataset):
     dff = hparams[HP_DFF]
     num_heads = hparams[HP_NUM_HEADS]
     dropout_rate = 0.1
+    is_shuffle = False
 
     # constant
     target_object_num = 41  # object num, オブジェクト数は40だがID=0があるため+1

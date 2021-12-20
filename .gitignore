@@ -205,5 +205,6 @@ Thumbs.db
 .vscode/
 checkpoints/
 logs/
+models/
 *.log
 *.out
