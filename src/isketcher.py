@@ -20,7 +20,7 @@ class InteractiveSketcher(tf.keras.Model):
         self.decoder = DecoderOnlyForSketcher(
             num_layers, d_model, num_heads, dff, rate)
 
-        self.final_layer = tf.keras.layers.Dense(object_num + 2)
+        self.final_layer = tf.keras.layers.Dense(object_num + 4)
 
     def call(
         self, tar, training, look_ahead_mask
@@ -36,6 +36,6 @@ class InteractiveSketcher(tf.keras.Model):
         )  # (batch_size, tar_seq_len, object_num + x + y)
 
         c_output = tf.nn.softmax(final_output[:, :, :self.object_num])
-        p_output = tf.math.sigmoid(final_output[:, :, -2:])
+        p_output = tf.math.sigmoid(final_output[:, :, self.object_num:])
 
         return c_output, p_output, attention_weights

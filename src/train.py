@@ -76,7 +76,7 @@ def loss_function(c_real, p_real, c_pred, p_pred, mask):
 def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_accuracy, train_mse):
     tar_inp = tar[:, :-1]
     tar_real = tar[:, 1:]
-    p_real = tar_real[:, :, -2:]
+    p_real = tar_real[:, :, -4:]
 
     labels_inp = labels[:, :-1]
     labels_real = labels[:, 1:]
@@ -105,7 +105,7 @@ def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_a
 def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_accuracy, valid_mse):
     tar_inp = tar[:, :-1]
     tar_real = tar[:, 1:]
-    p_real = tar_real[:, :, -2:]
+    p_real = tar_real[:, :, -4:]
 
     labels_inp = labels[:, :-1]
     labels_real = labels[:, 1:]
