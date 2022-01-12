@@ -1,135 +1,139 @@
-
+import random
 import sys
 
 import numpy as np
-import svgwrite
+import pandas as pd
+import tensorflow as tf
 from flask import Flask, jsonify, request
-from IPython.display import SVG, display
-from matplotlib import pyplot as plt
-from rdp import rdp
+
+from isketcher import InteractiveSketcher
+from util import (adjust_lines, draw_strokes, lines_to_sketch,
+                  strokes_to_lines, visualize)
 
 sys.path.append("../sketchformer")
 from basic_usage.sketchformer import continuous_embeddings
 
-sketchformer = continuous_embeddings.get_pretrained_model()
-
 app = Flask(__name__)
+CANVAS_SIZE = 750
 
 
-def visualize(sketch):
-    plt.clf()
-    X = []
-    Y = []
+def get_model(checkpoint_path):
 
-    tmp_x, tmp_y = [], []
-    sx = sy = 0
-    for p in sketch:
-        sx += p[0]
-        sy += p[1]
-        tmp_x.append(sx)
-        tmp_y.append(-sy)
-        if p[2] == 1:
-            X.append(tmp_x)
-            Y.append(tmp_y)
-            tmp_x, tmp_y = [], []
+    num_layers = 8
+    d_model = 64
+    dff = 128
+    num_heads = 4
+    dropout_rate = 0.1
+    target_object_num = 41
 
-    X.append(tmp_x)
-    Y.append(tmp_y)
+    interactive_sketcher = InteractiveSketcher(
+        num_layers=num_layers, d_model=d_model, num_heads=num_heads, dff=dff,
+        object_num=target_object_num, rate=dropout_rate)
 
-    for x, y in zip(X, Y):
-        plt.plot(x, y)
+    # restore model
 
-    # save the image.
-    plt.axes().set_aspect('equal')
-    plt.savefig("sample.png")
+    ckpt = tf.train.Checkpoint(epoch=tf.Variable(1),
+                               transformer=interactive_sketcher)
 
-    # show the plot
-    # plt.show()
+    ckpt_manager = tf.train.CheckpointManager(
+        ckpt, checkpoint_path, max_to_keep=5)
+
+    if ckpt_manager.latest_checkpoint:
+        ckpt.restore(ckpt_manager.latest_checkpoint)
+        print('Latest checkpoint restored!!')
+
+    return interactive_sketcher
 
 
-def get_bounds(data, factor):
-    min_x = 0
-    max_x = 0
-    min_y = 0
-    max_y = 0
+# setup
+sketchformer = continuous_embeddings.get_pretrained_model()
+interactive_sketcher = get_model("../notebooks/models/demo2")
 
-    abs_x = 0
-    abs_y = 0
-    for i in range(len(data)):
-        x = float(data[i, 0])/factor
-        y = float(data[i, 1])/factor
-        abs_x += x
-        abs_y += y
-        min_x = min(min_x, abs_x)
-        min_y = min(min_y, abs_y)
-        max_x = max(max_x, abs_x)
-        max_y = max(max_y, abs_y)
+# class label
+df = pd.read_csv('../outputs/sketchyscene_quickdraw.csv')
+df = df.dropna(subset=['quickdraw_label'])
+class_names = ['none']
+for row in df.itertuples():
+    class_names.append(row.quickdraw_label)
 
-    return (min_x, max_x, min_y, max_y)
-
-
-def draw_strokes(data, factor=0.2, svg_filename='sample.svg'):
-    min_x, max_x, min_y, max_y = get_bounds(data, factor)
-    dims = (50 + max_x - min_x, 50 + max_y - min_y)
-    dwg = svgwrite.Drawing(svg_filename, size=dims)
-    dwg.add(dwg.rect(insert=(0, 0), size=dims, fill='white'))
-    lift_pen = 1
-    abs_x = 25 - min_x
-    abs_y = 25 - min_y
-    p = "M%s,%s " % (abs_x, abs_y)
-    command = "m"
-    for i in range(len(data)):
-        if (lift_pen == 1):
-            command = "m"
-        elif (command != "l"):
-            command = "l"
-        else:
-            command = ""
-        x = float(data[i, 0])/factor
-        y = float(data[i, 1])/factor
-        lift_pen = data[i, 2]
-        p += command+str(x)+","+str(y)+" "
-    the_color = "black"
-    stroke_width = 1
-    dwg.add(dwg.path(p).stroke(the_color, stroke_width).fill("none"))
-    dwg.save()
-    # display(SVG(dwg.tostring()))
+quickdraw_map = {}
+df = pd.read_csv('../outputs/sketchyscene_quickdraw.csv')
+df = df.dropna(subset=['quickdraw_label'])
+for row in df.itertuples():
+    quickdraw = np.load(
+        f'../data/sketch_rnn/{row.quickdraw_label}.npz', encoding='latin1', allow_pickle=True)
+    quickdraw_map[row.quickdraw_label] = {
+        "train": quickdraw["train"],
+        "valid": quickdraw["valid"],
+        "test": quickdraw["test"],
+    }
 
 
-def lines_to_strokes(lines):
-    """Convert polyline format to stroke-3 format."""
-    eos = 0
-    strokes = [[0, 0, 0]]
-    for line in lines:
-        line = rdp(line, epsilon=2.0)
-        linelen = len(line)
-        for i in range(linelen):
-            eos = 0 if i < linelen - 1 else 1
-            strokes.append([line[i][0], line[i][1], eos])
-    strokes = np.array(strokes)
-    strokes[1:, 0] -= strokes[1:, 0].min()
-    strokes[1:, 1] -= strokes[1:, 1].min()
-    strokes[1:, 0:2] -= strokes[:-1, 0:2]
-    return strokes[1:, :]
+def preprocess(sketches):
+    inp = []
+
+    strokes_list = list(map(lambda o: o["strokes"], sketches))
+    sketch_embeddings = sketchformer.get_embeddings(strokes_list)
+    for se, obj in zip(sketch_embeddings, sketches):
+        p = list(map(lambda x: x / CANVAS_SIZE, obj["position"]))
+        o = se.numpy().tolist() + p
+        inp.append(o)
+
+    return tf.ragged.constant([inp]).to_tensor(0.)
 
 
-@app.route('/api/sketch', methods=["POST"])
+def get_random_strokes(name):
+    return random.choice(quickdraw_map[name]["test"]).tolist()
+
+
+def get_next_sketch(inp):
+    c_out, p_out, _ = interactive_sketcher(
+        inp, training=False, look_ahead_mask=None)
+
+    c_pred = c_out[0, -1, :]  # 最後のスケッチを取得
+    c_pred_id = tf.argmax(c_pred, axis=-1)
+    position = p_out[0, -1, :] * CANVAS_SIZE  # 最後のスケッチを取得
+
+    return {
+        "name": class_names[c_pred_id],
+        "position": list(map(int, position.numpy().tolist()))
+    }
+
+
+@app.route("/api/sketch", methods=["POST"])
 def draw_next_sketch():
-    user_sketch = request.get_json()['sketch']
+    previous_sketches = request.get_json()["previousSketches"]
+    user_lines = request.get_json()["userLines"]
 
     # convert to stroke-3 format
-    converted_user_sketch = lines_to_strokes(user_sketch)
+    user_sketch = lines_to_sketch(user_lines)
 
     # visualize
-    visualize(converted_user_sketch)
-    draw_strokes(converted_user_sketch)
+    visualize(user_sketch["strokes"])
+    draw_strokes(user_sketch["strokes"])
+
+    # next sketch
+    inp = preprocess(previous_sketches + [user_sketch])
+    next_sketch = get_next_sketch(inp)
+
+    # TODO: Sketch-RNNから生成する
+    strokes = get_random_strokes(next_sketch["name"])
+    agent_sketch = {
+        "strokes": strokes,
+        "position": next_sketch["position"]
+    }
+
+    lines = strokes_to_lines(strokes)
+    adjusted_lines = adjust_lines(lines, next_sketch["position"])
 
     # predict
-    pred_class = sketchformer.classify([converted_user_sketch])
+    pred_class = sketchformer.classify([user_sketch["strokes"]])
     print(pred_class)
 
     return jsonify({
-        "class": pred_class
+        "nextSketch": next_sketch,
+        "nextLines": adjusted_lines,
+        "previousSketches": previous_sketches + [user_sketch] + [agent_sketch]
     })
 
 
