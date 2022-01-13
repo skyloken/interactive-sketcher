@@ -68,6 +68,7 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
 def loss_function(c_real, p_real, c_pred, p_pred, mask):
     scce = tf.keras.losses.SparseCategoricalCrossentropy()
     mse = tf.keras.losses.MeanSquaredError()
+    sl1 = tf.keras.losses.Huber(delta=1.0)
 
     # class loss
     # クラスラベルはカテゴリカルクロスエントロピー
@@ -75,7 +76,7 @@ def loss_function(c_real, p_real, c_pred, p_pred, mask):
 
     # position loss
     # 位置座標は平均二乗誤差
-    p_loss = mse(p_real, p_pred, sample_weight=mask)
+    p_loss = sl1(p_real, p_pred, sample_weight=mask)
 
     return c_loss + p_loss, c_loss, p_loss
 

@@ -47,7 +47,7 @@ def get_model(checkpoint_path):
 
 # setup
 sketchformer = continuous_embeddings.get_pretrained_model()
-interactive_sketcher = get_model("../notebooks/models/demo3")
+interactive_sketcher = get_model("../notebooks/models/demo4")
 
 # class label
 df = pd.read_csv('../outputs/sketchyscene_quickdraw.csv')
