@@ -88,11 +88,11 @@ x_valid, y_valid = preprocess(valid, "valid", N)
 print("Preprocessing test dataset")
 x_test, y_test = preprocess(test, "test", N)
 
-np.savez_compressed('../data/isketcher/dataset_{N}.npz', x_train=x_train, y_train=y_train,
+np.savez_compressed(f'../data/isketcher/dataset_{N}.npz', x_train=x_train, y_train=y_train,
                     x_valid=x_valid, y_valid=y_valid, x_test=x_test, y_test=y_test)
 
 
-dataset = np.load('../data/isketcher/dataset_{N}.npz')
+dataset = np.load(f'../data/isketcher/dataset_{N}.npz')
 print(dataset.files)
 print(dataset['x_train'].shape)
 print(dataset['y_train'].shape)

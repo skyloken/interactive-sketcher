@@ -15,10 +15,10 @@ sys.path.append("../sketchformer")
 
 # HParams
 HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([64]))
-HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([8]))
-HP_D_MODEL = hp.HParam('d_model', hp.Discrete([64]))
-HP_DFF = hp.HParam('dff', hp.Discrete([128]))
-HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([4]))
+HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([8, 12]))
+HP_D_MODEL = hp.HParam('d_model', hp.Discrete([64, 128, 256]))
+HP_DFF = hp.HParam('dff', hp.Discrete([128, 256, 512]))
+HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([4, 8]))
 
 METRIC_LOSS = 'loss/train'
 METRIC_VAL_LOSS = 'loss/valid'
@@ -152,7 +152,7 @@ def run(run_dir, hparams, dataset):
     dff = hparams[HP_DFF]
     num_heads = hparams[HP_NUM_HEADS]
     dropout_rate = 0.1
-    is_shuffle = False
+    is_shuffle = True
 
     # constant
     target_object_num = 41  # object num, オブジェクト数は40だがID=0があるため+1
@@ -195,7 +195,6 @@ def run(run_dir, hparams, dataset):
     valid_iou = tf.keras.metrics.Mean(name='valid_loss')
 
     # load dataset
-    x_train, y_train = dataset['x_train'], dataset['y_train']
     x_valid, y_valid = dataset['x_valid'], dataset['y_valid']
 
     # tensorboard
@@ -204,6 +203,8 @@ def run(run_dir, hparams, dataset):
     # tf.function
     train_step_ = tf.function(train_step)
     valid_step_ = tf.function(valid_step)
+
+    rng = np.random.default_rng(100)
 
     for epoch in range(int(ckpt.epoch), EPOCHS + int(ckpt.epoch)):
         start = time.time()
@@ -217,6 +218,13 @@ def run(run_dir, hparams, dataset):
         valid_accuracy.reset_states()
         valid_mse.reset_states()
         valid_iou.reset_states()
+
+        # shuffle
+        x_train, y_train = dataset['x_train'], dataset['y_train']
+        if is_shuffle:
+            indices = rng.permutation(len(x_train))
+            x_train = x_train[indices]
+            y_train = y_train[indices]
 
         # train
         for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, BATCH_SIZE), batch(y_train, BATCH_SIZE))):
@@ -260,7 +268,7 @@ def run(run_dir, hparams, dataset):
 
 def main():
 
-    dataset = np.load('../data/isketcher/dataset.npz')
+    dataset = np.load('../data/isketcher/dataset_10.npz')
 
     session_num = 0
     for batch_size in HP_BATCH_SIZE.domain.values:
