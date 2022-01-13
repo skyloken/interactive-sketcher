@@ -25,20 +25,20 @@ class Canvas extends React.Component {
         })
         
         this.drawNextSketch = (label, position) => {
-            const x0 = position[0];
-            const y0 = position[1];
-            const x1 = position[2];
-            const y1 = position[3];
-            const w = x1 - x0;
-            const h = y1 - y0;
+            const x = position[0];
+            const y = position[1];
+            const w = position[2];
+            const h = position[3];
+            const xmin = x - (w / 2)
+            const ymin = y - (h / 2)
             
             p5.strokeWeight(1);
             p5.fill(0);
             p5.textSize(20);
-            p5.text(label, x0, y0);
+            p5.text(label, x, y);
 
             p5.noFill();
-            p5.rect(x0, y0, w, h);
+            p5.rect(xmin, ymin, w, h);
         }
     };
 
