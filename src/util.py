@@ -4,6 +4,22 @@ from matplotlib import pyplot as plt
 from rdp import rdp
 
 
+def xywh_to_p0p1(x, y, w, h):
+    x0 = x - (w / 2)
+    y0 = y - (h / 2)
+    x1 = x + (w / 2)
+    y1 = y + (h / 2)
+    return x0, y0, x1, y1
+
+
+def p0p1_to_xywh(x0, y0, x1, y1):
+    w = x1 - x0
+    h = y1 - y0
+    x = (x0 + x1) / 2
+    y = (y0 + y1) / 2
+    return x, y, w, h
+
+
 def raw_to_lines(raw):
     """Convert raw QuickDraw format to polyline format."""
     result = []
@@ -112,13 +128,14 @@ def lines_to_sketch(lines):
     strokes = np.array(strokes)
     x0, y0, x1, y1 = strokes[1:, 0].min(), strokes[1:, 1].min(
     ), strokes[1:, 0].max(), strokes[1:, 1].max()
+    x, y, w, h = p0p1_to_xywh(x0, y0, x1, y1)
     strokes[1:, 0] -= x0
     strokes[1:, 1] -= y0
     strokes[1:, 0:2] -= strokes[:-1, 0:2]
 
     return {
         "strokes": strokes[1:, :].tolist(),
-        "position": list(map(int, [x0, y0, x1, y1]))
+        "position": list(map(int, [x, y, w, h]))
     }
 
 
@@ -144,7 +161,8 @@ def strokes_to_lines(strokes):
 
 
 def adjust_lines(lines, position):
-    x0, y0, x1, y1 = position
+    x, y, w, h = position
+    x0, y0, x1, y1 = xywh_to_p0p1(x, y, w, h)
     wp, hp = x1 - x0, y1 - y0
 
     xmin = ymin = float("inf")

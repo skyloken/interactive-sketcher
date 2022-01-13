@@ -8,6 +8,7 @@ from tensorboard.plugins.hparams import api as hp
 
 from isketcher import InteractiveSketcher
 from mask import create_combined_mask
+from metrics import mean_iou
 
 sys.path.append("../sketchformer")
 
@@ -73,7 +74,7 @@ def loss_function(c_real, p_real, c_pred, p_pred, mask):
     return c_loss + p_loss, c_loss, p_loss
 
 
-def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_accuracy, train_mse):
+def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_accuracy, train_mse, train_iou):
     tar_inp = tar[:, :-1]
     tar_real = tar[:, 1:]
     p_real = tar_real[:, :, -4:]
@@ -100,9 +101,10 @@ def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_a
     train_loss(loss)
     train_accuracy(labels_real, c_out, sample_weight=mask)
     train_mse(p_loss)
+    train_iou(mean_iou(p_real, p_out, mask))
 
 
-def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_accuracy, valid_mse):
+def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_accuracy, valid_mse, valid_iou):
     tar_inp = tar[:, :-1]
     tar_real = tar[:, 1:]
     p_real = tar_real[:, :, -4:]
@@ -123,6 +125,7 @@ def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_accuracy, va
     valid_loss(loss)
     valid_accuracy(labels_real, c_out, sample_weight=mask)
     valid_mse(p_loss)
+    valid_iou(mean_iou(p_real, p_out, mask))
 
 
 def batch(iterable, n=1):
@@ -176,11 +179,13 @@ def run(run_dir, hparams, dataset):
     train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
         name='train_acc')
     train_mse = tf.keras.metrics.Mean(name='train_mse')
+    train_iou = tf.keras.metrics.Mean(name='train_loss')
 
     valid_loss = tf.keras.metrics.Mean(name='valid_loss')
     valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
         name='valid_acc')
     valid_mse = tf.keras.metrics.Mean(name='valid_mse')
+    valid_iou = tf.keras.metrics.Mean(name='valid_loss')
 
     # load dataset
     x_train, y_train = dataset['x_train'], dataset['y_train']
@@ -199,23 +204,25 @@ def run(run_dir, hparams, dataset):
         train_loss.reset_states()
         train_accuracy.reset_states()
         train_mse.reset_states()
+        train_iou.reset_states()
 
         valid_loss.reset_states()
         valid_accuracy.reset_states()
         valid_mse.reset_states()
+        valid_iou.reset_states()
 
         # train
         for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, BATCH_SIZE), batch(y_train, BATCH_SIZE))):
             train_step_(interactive_sketcher, optimizer, x_batch,
-                        y_batch, train_loss, train_accuracy, train_mse)
+                        y_batch, train_loss, train_accuracy, train_mse, train_iou)
 
             if (i + 1) % 50 == 0:
-                print('Epoch {}, Batch {}, loss {:.4f}, acc {:.4f}, mse {:.4f}'.format(
-                    epoch, i + 1, train_loss.result(), train_accuracy.result(), train_mse.result()))
+                print('Epoch {}, Batch {}, loss {:.4f}, acc {:.4f}, mse {:.4f}, iou {:.4f}'.format(
+                    epoch, i + 1, train_loss.result(), train_accuracy.result(), train_mse.result(), train_iou.result()))
 
         # valid
         valid_step_(interactive_sketcher, x_valid,
-                    y_valid, valid_loss, valid_accuracy, valid_mse)
+                    y_valid, valid_loss, valid_accuracy, valid_mse, valid_iou)
 
         with summary_writer.as_default():
             tf.summary.scalar(METRIC_LOSS, train_loss.result(), step=epoch)
@@ -233,8 +240,8 @@ def run(run_dir, hparams, dataset):
             print('Saving checkpoint for epoch {} at {}'.format(
                 epoch, ckpt_save_path))
 
-        print('Epoch {}, loss {:.4f}, acc {:.4f}, mse {:.4f}, val_loss {:.4f}, val_acc {:.4f}, val_mse {:.4f}'.format(
-            epoch, train_loss.result(), train_accuracy.result(), train_mse.result(), valid_loss.result(), valid_accuracy.result(), valid_mse.result()))
+        print('Epoch {}, loss {:.4f}, acc {:.4f}, mse {:.4f}, iou {:.4f}, val_loss {:.4f}, val_acc {:.4f}, val_mse {:.4f}, val_iou {:.4f}'.format(
+            epoch, train_loss.result(), train_accuracy.result(), train_mse.result(), train_iou.result(), valid_loss.result(), valid_accuracy.result(), valid_mse.result(), valid_iou.result()))
 
         print('Time taken for 1 epoch: {} secs\n'.format(time.time() - start))
 
