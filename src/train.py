@@ -7,6 +7,7 @@ import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
 from isketcher import InteractiveSketcher
+from loss import giou_loss
 from mask import create_combined_mask
 from metrics import mean_iou
 
@@ -15,17 +16,21 @@ sys.path.append("../sketchformer")
 
 # HParams
 HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([64]))
-HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([8, 12]))
-HP_D_MODEL = hp.HParam('d_model', hp.Discrete([64, 128, 256]))
-HP_DFF = hp.HParam('dff', hp.Discrete([128, 256, 512]))
-HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([4, 8]))
+HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([8]))
+HP_D_MODEL = hp.HParam('d_model', hp.Discrete([64]))
+HP_DFF = hp.HParam('dff', hp.Discrete([128]))
+HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([4]))
 
 METRIC_LOSS = 'loss/train'
 METRIC_VAL_LOSS = 'loss/valid'
+METRIC_PLOSS = 'ploss/train'
+METRIC_VAL_PLOSS = 'ploss/valid'
+METRIC_CLOSS = 'closs/train'
+METRIC_VAL_CLOSS = 'closs/valid'
 METRIC_ACC = 'acc/train'
 METRIC_VAL_ACC = 'acc/valid'
-METRIC_MSE = 'mse/train'
-METRIC_VAL_MSE = 'mse/valid'
+METRIC_MAE = 'mae/train'
+METRIC_VAL_MAE = 'mae/valid'
 METRIC_IOU = 'iou/train'
 METRIC_VAL_IOU = 'iou/valid'
 
@@ -41,8 +46,8 @@ with tf.summary.create_file_writer(log_dir).as_default():
             hp.Metric(METRIC_VAL_LOSS, display_name='val_loss'),
             hp.Metric(METRIC_ACC, display_name='acc'),
             hp.Metric(METRIC_VAL_ACC, display_name='val_acc'),
-            hp.Metric(METRIC_MSE, display_name='mse'),
-            hp.Metric(METRIC_VAL_MSE, display_name='val_mse'),
+            hp.Metric(METRIC_MAE, display_name='mae'),
+            hp.Metric(METRIC_VAL_MAE, display_name='val_mae'),
             hp.Metric(METRIC_IOU, display_name='iou'),
             hp.Metric(METRIC_VAL_IOU, display_name='val_iou')
         ],
@@ -65,7 +70,7 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
         return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
 
 
-def loss_function(c_real, p_real, c_pred, p_pred, mask):
+def loss_function(c_real, p_real, c_pred, p_pred, mask, alpha = 1.0, beta = 1.0):
     scce = tf.keras.losses.SparseCategoricalCrossentropy()
     mse = tf.keras.losses.MeanSquaredError()
     sl1 = tf.keras.losses.Huber(delta=1.0)
@@ -76,12 +81,16 @@ def loss_function(c_real, p_real, c_pred, p_pred, mask):
 
     # position loss
     # 位置座標は平均二乗誤差
-    p_loss = sl1(p_real, p_pred, sample_weight=mask)
+    # p_loss = mse(p_real, p_pred, sample_weight=mask)
+    # p_loss = sl1(p_real, p_pred, sample_weight=mask)
+    p_loss = sl1(p_real[:, :, 0:2], p_pred[:, :, 0:2], sample_weight=mask) + \
+        sl1(p_real[:, :, 2:4], p_pred[:, :, 2:4], sample_weight=mask)
+    # p_loss = giou_loss(p_real, p_pred, mask)
 
-    return c_loss + p_loss, c_loss, p_loss
+    return (alpha * c_loss) + (beta * p_loss), c_loss, p_loss
 
 
-def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_accuracy, train_mse, train_iou):
+def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_closs, train_ploss, train_accuracy, train_mae, train_iou):
     tar_inp = tar[:, :-1]
     tar_real = tar[:, 1:]
     p_real = tar_real[:, :, -4:]
@@ -106,12 +115,14 @@ def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_a
         zip(gradients, interactive_sketcher.trainable_variables))
 
     train_loss(loss)
+    train_closs(c_loss)
+    train_ploss(p_loss)
     train_accuracy(labels_real, c_out, sample_weight=mask)
-    train_mse(p_loss)
+    train_mae(p_real, p_out)
     train_iou(mean_iou(p_real, p_out, mask))
 
 
-def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_accuracy, valid_mse, valid_iou):
+def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_closs, valid_ploss, valid_accuracy, valid_mae, valid_iou):
     tar_inp = tar[:, :-1]
     tar_real = tar[:, 1:]
     p_real = tar_real[:, :, -4:]
@@ -130,8 +141,10 @@ def valid_step(interactive_sketcher, tar, labels, valid_loss, valid_accuracy, va
         labels_real, p_real, c_out, p_out, mask)
 
     valid_loss(loss)
+    valid_closs(c_loss)
+    valid_ploss(p_loss)
     valid_accuracy(labels_real, c_out, sample_weight=mask)
-    valid_mse(p_loss)
+    valid_mae(p_real, p_out)
     valid_iou(mean_iou(p_real, p_out, mask))
 
 
@@ -144,7 +157,7 @@ def batch(iterable, n=1):
 def run(run_dir, hparams, dataset):
 
     # hyper parameters
-    EPOCHS = 50
+    EPOCHS = 1000
     BATCH_SIZE = hparams[HP_BATCH_SIZE]
 
     num_layers = hparams[HP_NUM_LAYERS]
@@ -153,6 +166,7 @@ def run(run_dir, hparams, dataset):
     num_heads = hparams[HP_NUM_HEADS]
     dropout_rate = 0.1
     is_shuffle = True
+    is_restore = False
 
     # constant
     target_object_num = 41  # object num, オブジェクト数は40だがID=0があるため+1
@@ -177,24 +191,29 @@ def run(run_dir, hparams, dataset):
     ckpt_manager = tf.train.CheckpointManager(
         ckpt, checkpoint_path, max_to_keep=5)
 
-    # if ckpt_manager.latest_checkpoint:
-    #     ckpt.restore(ckpt_manager.latest_checkpoint)
-    #     print('Latest checkpoint restored!!')
+    if is_restore and ckpt_manager.latest_checkpoint:
+        ckpt.restore(ckpt_manager.latest_checkpoint)
+        print('Latest checkpoint restored!!')
 
     # metrics
     train_loss = tf.keras.metrics.Mean(name='train_loss')
+    train_closs = tf.keras.metrics.Mean(name='train_closs')
+    train_ploss = tf.keras.metrics.Mean(name='train_ploss')
     train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
         name='train_acc')
-    train_mse = tf.keras.metrics.Mean(name='train_mse')
+    train_mae = tf.keras.metrics.MeanAbsoluteError(name='train_mae')
     train_iou = tf.keras.metrics.Mean(name='train_loss')
 
     valid_loss = tf.keras.metrics.Mean(name='valid_loss')
+    valid_closs = tf.keras.metrics.Mean(name='valid_closs')
+    valid_ploss = tf.keras.metrics.Mean(name='valid_ploss')
     valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
         name='valid_acc')
-    valid_mse = tf.keras.metrics.Mean(name='valid_mse')
+    valid_mae = tf.keras.metrics.MeanAbsoluteError(name='valid_mae')
     valid_iou = tf.keras.metrics.Mean(name='valid_loss')
 
     # load dataset
+    x_train, y_train = dataset['x_train'], dataset['y_train']
     x_valid, y_valid = dataset['x_valid'], dataset['y_valid']
 
     # tensorboard
@@ -211,16 +230,15 @@ def run(run_dir, hparams, dataset):
 
         train_loss.reset_states()
         train_accuracy.reset_states()
-        train_mse.reset_states()
+        train_mae.reset_states()
         train_iou.reset_states()
 
         valid_loss.reset_states()
         valid_accuracy.reset_states()
-        valid_mse.reset_states()
+        valid_mae.reset_states()
         valid_iou.reset_states()
 
         # shuffle
-        x_train, y_train = dataset['x_train'], dataset['y_train']
         if is_shuffle:
             indices = rng.permutation(len(x_train))
             x_train = x_train[indices]
@@ -229,26 +247,32 @@ def run(run_dir, hparams, dataset):
         # train
         for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, BATCH_SIZE), batch(y_train, BATCH_SIZE))):
             train_step_(interactive_sketcher, optimizer, x_batch,
-                        y_batch, train_loss, train_accuracy, train_mse, train_iou)
+                        y_batch, train_loss, train_closs, train_ploss, train_accuracy, train_mae, train_iou)
 
             if (i + 1) % 50 == 0:
-                print('Epoch {}, Batch {}, loss {:.4f}, acc {:.4f}, mse {:.4f}, iou {:.4f}'.format(
-                    epoch, i + 1, train_loss.result(), train_accuracy.result(), train_mse.result(), train_iou.result()))
+                print('Epoch {}, Batch {}, loss {:.4f}, acc {:.4f}, mae {:.4f}, iou {:.4f}'.format(
+                    epoch, i + 1, train_loss.result(), train_accuracy.result(), train_mae.result(), train_iou.result()))
 
         # valid
         valid_step_(interactive_sketcher, x_valid,
-                    y_valid, valid_loss, valid_accuracy, valid_mse, valid_iou)
+                    y_valid, valid_loss, valid_closs, valid_ploss, valid_accuracy, valid_mae, valid_iou)
 
         with summary_writer.as_default():
             tf.summary.scalar(METRIC_LOSS, train_loss.result(), step=epoch)
+            tf.summary.scalar(METRIC_CLOSS, train_closs.result(), step=epoch)
+            tf.summary.scalar(METRIC_PLOSS, train_ploss.result(), step=epoch)
             tf.summary.scalar(METRIC_ACC, train_accuracy.result(), step=epoch)
-            tf.summary.scalar(METRIC_MSE, train_mse.result(), step=epoch)
+            tf.summary.scalar(METRIC_MAE, train_mae.result(), step=epoch)
             tf.summary.scalar(METRIC_IOU, train_iou.result(), step=epoch)
 
             tf.summary.scalar(METRIC_VAL_LOSS, valid_loss.result(), step=epoch)
+            tf.summary.scalar(METRIC_VAL_CLOSS,
+                              valid_closs.result(), step=epoch)
+            tf.summary.scalar(METRIC_VAL_PLOSS,
+                              valid_ploss.result(), step=epoch)
             tf.summary.scalar(
                 METRIC_VAL_ACC, valid_accuracy.result(), step=epoch)
-            tf.summary.scalar(METRIC_VAL_MSE, valid_mse.result(), step=epoch)
+            tf.summary.scalar(METRIC_VAL_MAE, valid_mae.result(), step=epoch)
             tf.summary.scalar(METRIC_VAL_IOU, valid_iou.result(), step=epoch)
 
         ckpt.epoch.assign_add(1)
@@ -257,8 +281,8 @@ def run(run_dir, hparams, dataset):
             print('Saving checkpoint for epoch {} at {}'.format(
                 epoch, ckpt_save_path))
 
-        print('Epoch {}, loss {:.4f}, acc {:.4f}, mse {:.4f}, iou {:.4f}, val_loss {:.4f}, val_acc {:.4f}, val_mse {:.4f}, val_iou {:.4f}'.format(
-            epoch, train_loss.result(), train_accuracy.result(), train_mse.result(), train_iou.result(), valid_loss.result(), valid_accuracy.result(), valid_mse.result(), valid_iou.result()))
+        print('Epoch {}, loss {:.4f}, acc {:.4f}, mae {:.4f}, iou {:.4f}, val_loss {:.4f}, val_acc {:.4f}, val_mae {:.4f}, val_iou {:.4f}'.format(
+            epoch, train_loss.result(), train_accuracy.result(), train_mae.result(), train_iou.result(), valid_loss.result(), valid_accuracy.result(), valid_mae.result(), valid_iou.result()))
 
         print('Time taken for 1 epoch: {} secs\n'.format(time.time() - start))
 
@@ -268,7 +292,7 @@ def run(run_dir, hparams, dataset):
 
 def main():
 
-    dataset = np.load('../data/isketcher/dataset_10.npz')
+    dataset = np.load('../data/isketcher/dataset_ar.npz')
 
     session_num = 0
     for batch_size in HP_BATCH_SIZE.domain.values:
