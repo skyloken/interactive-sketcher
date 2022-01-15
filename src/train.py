@@ -35,7 +35,9 @@ METRIC_IOU = 'iou/train'
 METRIC_VAL_IOU = 'iou/valid'
 
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+# current_time = "20220115-222828"
 log_dir = f"./logs/{current_time}"
+is_restore = False
 
 with tf.summary.create_file_writer(log_dir).as_default():
     hp.hparams_config(
@@ -70,8 +72,8 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
         return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
 
 
-def loss_function(c_real, p_real, c_pred, p_pred, mask, alpha = 1.0, beta = 1.0):
-    scce = tf.keras.losses.SparseCategoricalCrossentropy()
+def loss_function(c_real, p_real, c_pred, p_pred, mask, lc = 1.0, lp = 1.0):
+    scce = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     mse = tf.keras.losses.MeanSquaredError()
     sl1 = tf.keras.losses.Huber(delta=1.0)
 
@@ -87,7 +89,7 @@ def loss_function(c_real, p_real, c_pred, p_pred, mask, alpha = 1.0, beta = 1.0)
         sl1(p_real[:, :, 2:4], p_pred[:, :, 2:4], sample_weight=mask)
     # p_loss = giou_loss(p_real, p_pred, mask)
 
-    return (alpha * c_loss) + (beta * p_loss), c_loss, p_loss
+    return (lc * c_loss) + (lp * p_loss), c_loss, p_loss
 
 
 def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_closs, train_ploss, train_accuracy, train_mae, train_iou):
@@ -157,7 +159,7 @@ def batch(iterable, n=1):
 def run(run_dir, hparams, dataset):
 
     # hyper parameters
-    EPOCHS = 1000
+    EPOCHS = 5000
     BATCH_SIZE = hparams[HP_BATCH_SIZE]
 
     num_layers = hparams[HP_NUM_LAYERS]
@@ -166,7 +168,6 @@ def run(run_dir, hparams, dataset):
     num_heads = hparams[HP_NUM_HEADS]
     dropout_rate = 0.1
     is_shuffle = True
-    is_restore = False
 
     # constant
     target_object_num = 41  # object num, オブジェクト数は40だがID=0があるため+1
@@ -189,7 +190,7 @@ def run(run_dir, hparams, dataset):
                                optimizer=optimizer)
 
     ckpt_manager = tf.train.CheckpointManager(
-        ckpt, checkpoint_path, max_to_keep=5)
+        ckpt, checkpoint_path, max_to_keep=None)
 
     if is_restore and ckpt_manager.latest_checkpoint:
         ckpt.restore(ckpt_manager.latest_checkpoint)
@@ -276,7 +277,7 @@ def run(run_dir, hparams, dataset):
             tf.summary.scalar(METRIC_VAL_IOU, valid_iou.result(), step=epoch)
 
         ckpt.epoch.assign_add(1)
-        if epoch % 1 == 0:
+        if epoch % 100 == 0:
             ckpt_save_path = ckpt_manager.save()
             print('Saving checkpoint for epoch {} at {}'.format(
                 epoch, ckpt_save_path))

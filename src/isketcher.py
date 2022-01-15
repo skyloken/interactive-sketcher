@@ -35,7 +35,7 @@ class InteractiveSketcher(tf.keras.Model):
             dec_output
         )  # (batch_size, tar_seq_len, object_num + x + y)
 
-        c_output = tf.nn.softmax(final_output[:, :, :self.object_num])
-        p_output = tf.math.sigmoid(final_output[:, :, self.object_num:])
+        c_output = final_output[:, :, :self.object_num]
+        p_output = final_output[:, :, self.object_num:]
 
         return c_output, p_output, attention_weights
