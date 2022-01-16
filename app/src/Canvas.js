@@ -11,13 +11,17 @@ class Canvas extends React.Component {
         this.previousSketches = [];
         this.agentLines = [];
         this.isUserTurn = true;
+        this.isShowComposition = false;
+        this.state = {
+            agentMessage: "Agent: Draw your first sketch!",
+        };
     }
 
     setup = (p5, canvasParentRef) => {
         // use parent to render the canvas in this ref
         // (without that p5 will render the canvas outside of your component)
         this.cnv = p5.createCanvas(750, 750).parent(canvasParentRef);
-        p5.background(200);
+        p5.background(230);
 
         this.cnv.mouseReleased((event) => {
             this.userLines.push(this.userLine.slice(0, this.userLine.length));
@@ -35,7 +39,7 @@ class Canvas extends React.Component {
             p5.strokeWeight(1);
             p5.fill(0);
             p5.textSize(20);
-            p5.text(label, x, y);
+            p5.text(label, xmin, ymin - 5);
 
             p5.noFill();
             p5.rect(xmin, ymin, w, h);
@@ -92,8 +96,13 @@ class Canvas extends React.Component {
             .then(data => {
                 console.log(data);
                 this.previousSketches = data.previousSketches;
-                this.drawNextSketch(data.nextSketch.name, data.nextSketch.position);
                 this.agentLines = data.nextLines;
+                if (this.isShowComposition) {
+                    this.drawNextSketch(data.nextSketch.name, data.nextSketch.position);
+                }
+                this.setState({
+                    agentMessage: `Agent: I drew ${data.nextSketch.name}, now it's your turn!`
+                });
             });
     }
 
@@ -109,6 +118,7 @@ class Canvas extends React.Component {
     render() {
         return <>
             <Sketch setup={this.setup} draw={this.draw} />
+            <p>{this.state.agentMessage}</p>
             <Button variant="contained" onClick={this.handleEndSketchButtonClick}>Next</Button>
         </>;
     }

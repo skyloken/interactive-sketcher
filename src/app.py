@@ -19,10 +19,10 @@ CANVAS_SIZE = 750
 
 def get_model(checkpoint_path):
 
-    num_layers = 8
-    d_model = 64
-    dff = 128
-    num_heads = 4
+    num_layers = 6
+    d_model = 512
+    dff = 2048
+    num_heads = 8
     dropout_rate = 0.1
     target_object_num = 41
 
@@ -47,7 +47,7 @@ def get_model(checkpoint_path):
 
 # setup
 sketchformer = continuous_embeddings.get_pretrained_model()
-interactive_sketcher = get_model("../notebooks/models/demo4")
+interactive_sketcher = get_model("../models/model_12/checkpoints/")
 
 # class label
 df = pd.read_csv('../outputs/sketchyscene_quickdraw.csv')
@@ -109,8 +109,8 @@ def draw_next_sketch():
     user_sketch = lines_to_sketch(user_lines)
 
     # visualize
-    visualize(user_sketch["strokes"])
-    draw_strokes(user_sketch["strokes"])
+    # visualize(user_sketch["strokes"])
+    # draw_strokes(user_sketch["strokes"])
 
     # next sketch
     inp = preprocess(previous_sketches + [user_sketch])
