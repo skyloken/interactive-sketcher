@@ -15,11 +15,11 @@ sys.path.append("../sketchformer")
 
 
 # HParams
-HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([64]))
-HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([8]))
-HP_D_MODEL = hp.HParam('d_model', hp.Discrete([64]))
-HP_DFF = hp.HParam('dff', hp.Discrete([128]))
-HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([4]))
+HP_BATCH_SIZE = hp.HParam('batch_size', hp.Discrete([128]))
+HP_NUM_LAYERS = hp.HParam('num_layers', hp.Discrete([6]))
+HP_D_MODEL = hp.HParam('d_model', hp.Discrete([512]))
+HP_DFF = hp.HParam('dff', hp.Discrete([2048]))
+HP_NUM_HEADS = hp.HParam('num_heads', hp.Discrete([8]))
 
 METRIC_LOSS = 'loss/train'
 METRIC_VAL_LOSS = 'loss/valid'
@@ -37,7 +37,7 @@ METRIC_VAL_IOU = 'iou/valid'
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 # current_time = "20220115-222828"
 log_dir = f"./logs/{current_time}"
-is_restore = False
+is_restore = True
 
 with tf.summary.create_file_writer(log_dir).as_default():
     hp.hparams_config(
@@ -72,7 +72,7 @@ class CustomSchedule(tf.keras.optimizers.schedules.LearningRateSchedule):
         return tf.math.rsqrt(self.d_model) * tf.math.minimum(arg1, arg2)
 
 
-def loss_function(c_real, p_real, c_pred, p_pred, mask, lc = 1.0, lp = 1.0):
+def loss_function(c_real, p_real, c_pred, p_pred, mask, lc=1.0, lp=1.0):
     scce = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
     mse = tf.keras.losses.MeanSquaredError()
     sl1 = tf.keras.losses.Huber(delta=1.0)
@@ -92,7 +92,7 @@ def loss_function(c_real, p_real, c_pred, p_pred, mask, lc = 1.0, lp = 1.0):
     return (lc * c_loss) + (lp * p_loss), c_loss, p_loss
 
 
-def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_closs, train_ploss, train_accuracy, train_mae, train_iou):
+def train_step(interactive_sketcher, optimizer, tar, labels, lc, lp, train_loss, train_closs, train_ploss, train_accuracy, train_mae, train_iou):
     tar_inp = tar[:, :-1]
     tar_real = tar[:, 1:]
     p_real = tar_real[:, :, -4:]
@@ -110,7 +110,7 @@ def train_step(interactive_sketcher, optimizer, tar, labels, train_loss, train_c
             tar_inp, True, combined_mask)
 
         loss, c_loss, p_loss = loss_function(
-            labels_real, p_real, c_out, p_out, mask)
+            labels_real, p_real, c_out, p_out, mask, lc, lp)
 
     gradients = tape.gradient(loss, interactive_sketcher.trainable_variables)
     optimizer.apply_gradients(
@@ -159,7 +159,7 @@ def batch(iterable, n=1):
 def run(run_dir, hparams, dataset):
 
     # hyper parameters
-    EPOCHS = 5000
+    EPOCHS = 400
     BATCH_SIZE = hparams[HP_BATCH_SIZE]
 
     num_layers = hparams[HP_NUM_LAYERS]
@@ -168,6 +168,9 @@ def run(run_dir, hparams, dataset):
     num_heads = hparams[HP_NUM_HEADS]
     dropout_rate = 0.1
     is_shuffle = True
+
+    lc = 0.01
+    lp = 1.0
 
     # constant
     target_object_num = 41  # object num, オブジェクト数は40だがID=0があるため+1
@@ -248,7 +251,7 @@ def run(run_dir, hparams, dataset):
         # train
         for i, (x_batch, y_batch) in enumerate(zip(batch(x_train, BATCH_SIZE), batch(y_train, BATCH_SIZE))):
             train_step_(interactive_sketcher, optimizer, x_batch,
-                        y_batch, train_loss, train_closs, train_ploss, train_accuracy, train_mae, train_iou)
+                        y_batch, lc, lp, train_loss, train_closs, train_ploss, train_accuracy, train_mae, train_iou)
 
             if (i + 1) % 50 == 0:
                 print('Epoch {}, Batch {}, loss {:.4f}, acc {:.4f}, mae {:.4f}, iou {:.4f}'.format(
@@ -277,7 +280,7 @@ def run(run_dir, hparams, dataset):
             tf.summary.scalar(METRIC_VAL_IOU, valid_iou.result(), step=epoch)
 
         ckpt.epoch.assign_add(1)
-        if epoch % 100 == 0:
+        if epoch % 10 == 0:
             ckpt_save_path = ckpt_manager.save()
             print('Saving checkpoint for epoch {} at {}'.format(
                 epoch, ckpt_save_path))

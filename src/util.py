@@ -189,6 +189,10 @@ def adjust_lines(lines, position):
             y *= scale_factor
             x += x0
             y += y0
+            if x_scale_factor < y_scale_factor:
+                y += (hp - hs * scale_factor) / 2
+            else:
+                x += (wp - ws * scale_factor) / 2
             adjusted_line.append([int(x), int(y)])
         adjusted_lines.append(adjusted_line)
         adjusted_line = []
