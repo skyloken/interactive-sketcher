@@ -1,3 +1,6 @@
 [submodule "sketchformer"]
 	path = sketchformer
 	url = https://github.com/skyloken/sketchformer.git
+[submodule "SketchRNN_tf2"]
+	path = SketchRNN_tf2
+	url = https://github.com/stwind/SketchRNN_tf2.git
