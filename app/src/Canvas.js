@@ -1,4 +1,4 @@
-import { Button } from "@mui/material";
+import { Button, Checkbox } from "@mui/material";
 import React from "react";
 import Sketch from "react-p5";
 
@@ -11,9 +11,9 @@ class Canvas extends React.Component {
         this.previousSketches = [];
         this.agentLines = [];
         this.isUserTurn = true;
-        this.isShowComposition = false;
         this.state = {
             agentMessage: "Agent: Draw your first sketch!",
+            isShowComposition: false,
         };
     }
 
@@ -27,7 +27,7 @@ class Canvas extends React.Component {
             this.userLines.push(this.userLine.slice(0, this.userLine.length));
             this.userLine.splice(0);
         })
-        
+
         this.drawNextSketch = (label, position) => {
             const x = position[0];
             const y = position[1];
@@ -35,7 +35,7 @@ class Canvas extends React.Component {
             const h = position[3];
             const xmin = x - (w / 2)
             const ymin = y - (h / 2)
-            
+
             p5.strokeWeight(1);
             p5.fill(0);
             p5.textSize(20);
@@ -52,7 +52,7 @@ class Canvas extends React.Component {
         // please use normal variables or class properties for these purposes
         p5.stroke(0);
         p5.strokeWeight(4);
-        
+
         if (this.isUserTurn) {
             // User
             if (p5.mouseIsPressed
@@ -97,7 +97,7 @@ class Canvas extends React.Component {
                 console.log(data);
                 this.previousSketches = data.previousSketches;
                 this.agentLines = data.nextLines;
-                if (this.isShowComposition) {
+                if (this.state.isShowComposition) {
                     this.drawNextSketch(data.nextSketch.name, data.nextSketch.position);
                 }
                 this.setState({
@@ -115,11 +115,18 @@ class Canvas extends React.Component {
         this.userLines.splice(0);
     }
 
+    handleCheckboxChange = () => {
+        this.setState({
+            isShowComposition: !this.state.isShowComposition,
+        })
+    }
+
     render() {
         return <>
             <Sketch setup={this.setup} draw={this.draw} />
             <p>{this.state.agentMessage}</p>
             <Button variant="contained" onClick={this.handleEndSketchButtonClick}>Next</Button>
+            <Checkbox checked={this.state.isShowComposition} onChange={this.handleCheckboxChange} />
         </>;
     }
 

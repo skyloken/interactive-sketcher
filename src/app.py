@@ -1,5 +1,6 @@
 import random
 import sys
+from pprint import pprint
 
 import numpy as np
 import pandas as pd
@@ -41,6 +42,7 @@ def get_model(checkpoint_path):
     if ckpt_manager.latest_checkpoint:
         ckpt.restore(ckpt_manager.latest_checkpoint)
         print('Latest checkpoint restored!!')
+        print(ckpt_manager.latest_checkpoint)
 
     return interactive_sketcher
 
@@ -55,6 +57,7 @@ df = df.dropna(subset=['quickdraw_label'])
 class_names = ['none']
 for row in df.itertuples():
     class_names.append(row.quickdraw_label)
+pprint(class_names)
 
 quickdraw_map = {}
 df = pd.read_csv('../outputs/sketchyscene_quickdraw.csv')
