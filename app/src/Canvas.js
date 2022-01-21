@@ -111,6 +111,9 @@ class Canvas extends React.Component {
             return;
         }
         this.isUserTurn = false;
+        this.setState({
+            agentMessage: `Agent: I'm thinking, so give me a minute...`
+        });
         this.fetchSketch();
         this.userLines.splice(0);
     }

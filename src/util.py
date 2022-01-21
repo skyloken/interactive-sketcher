@@ -198,3 +198,18 @@ def adjust_lines(lines, position):
         adjusted_line = []
 
     return adjusted_lines
+
+
+def to_normal_strokes(big_stroke):
+    """Convert from stroke-5 format (from sketch-rnn paper) back to stroke-3."""
+    l = 0
+    for i in range(len(big_stroke)):
+        if big_stroke[i, 4] > 0:
+            l = i
+            break
+    if l == 0:
+        l = len(big_stroke)
+    result = np.zeros((l, 3))
+    result[:, 0:2] = big_stroke[0:l, 0:2]
+    result[:, 2] = big_stroke[0:l, 3]
+    return result

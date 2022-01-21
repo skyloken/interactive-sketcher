@@ -20,7 +20,7 @@ from sketchrnn import dataset, models, utils
 with open('../outputs/labels.txt', 'r') as f:
     classes = list(map(lambda s: s.strip(), f.readlines()))
 
-for data_class in classes[1:]:
+for data_class in classes:
 
     print("Training:", data_class)
 
