@@ -23,7 +23,6 @@ def draw_next_sketch():
     next_sketch = agent.get_next_sketch(inp)
     print(next_sketch)
 
-    # TODO: Sketch-RNNから生成する
     strokes = sketchrnn.get_random_strokes(next_sketch["name"])
     agent_sketch = {
         "strokes": strokes,

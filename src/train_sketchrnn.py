@@ -1,3 +1,4 @@
+import glob
 import math
 import os
 import sys
@@ -35,7 +36,7 @@ for data_class in classes:
         "max_seq_len": max(map(len, np.concatenate([data['train'], data['valid'], data['test']]))),
         'batch_size': 100,
         "num_batches": math.ceil(len(data_train) / 100),
-        "epochs": 10,
+        "epochs": 30,
         "recurrent_dropout_prob": 0.1,  # 0.0 for gpu lstm
         "enc_rnn_size": 256,
         "dec_rnn_size": 512,
@@ -67,12 +68,10 @@ for data_class in classes:
     os.makedirs(checkpoint_dir, exist_ok=True)
     os.makedirs(log_dir, exist_ok=True)
 
-    initial_epoch = 0  # @param {type: "number"}
-    initial_loss = 0.05  # @param {type: "number"}
-    checkpoint = os.path.join(
-        checkpoint_dir, 'sketch_rnn_' + data_class + '_weights.{:02d}_{:.2f}.hdf5')
+    checkpoint = os.path.join(checkpoint_dir, 'sketch_rnn_' + data_class + '_weights.{:02d}_{:.2f}.hdf5')
+    checkpoints = sorted(glob.glob(os.path.join(checkpoint_dir, '*.hdf5')))
+    latest_checkpoint = checkpoints[-1]
+    initial_epoch = len(checkpoints)
 
-    if initial_epoch > 0:
-        sketchrnn.load_weights(checkpoint.format(initial_epoch, initial_loss))
-
+    sketchrnn.load_weights(latest_checkpoint)
     sketchrnn.train(initial_epoch, train_dataset, val_dataset, checkpoint)

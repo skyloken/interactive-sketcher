@@ -208,3 +208,4 @@ logs/
 models/
 *.log
 *.out
+temp/

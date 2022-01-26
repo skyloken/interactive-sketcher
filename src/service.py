@@ -1,6 +1,5 @@
 import glob
 import math
-import os
 import random
 import sys
 
@@ -14,13 +13,14 @@ if 1 == 1:
     sys.path.append("../sketchformer")
     from basic_usage.sketchformer import continuous_embeddings
     sys.path.append('../SketchRNN_tf2')
-    from sketchrnn import dataset, models, utils
+    from sketchrnn import dataset, models
 
 CANVAS_SIZE = 750
 
 # class names
 with open('../outputs/labels.txt', 'r') as f:
     class_names = list(map(lambda s: s.strip(), f.readlines()))
+
 
 class Agent:
 
@@ -95,7 +95,11 @@ class SketchRNN:
         for name in class_names:
             quickdraw_npz = np.load(
                 f'../data/quickdraw/{name}.npz', encoding='latin1', allow_pickle=True)
-            self.quickdraw[name] = quickdraw_npz
+            self.quickdraw[name] = {
+                "train": quickdraw_npz["train"],
+                "valid": quickdraw_npz["valid"],
+                "test": quickdraw_npz["test"]
+            }
 
     def get_random_strokes(self, name, temp=0.01):
         if self.from_dataset:
@@ -129,5 +133,7 @@ class SketchRNN:
             checkpoint = sorted(
                 glob.glob(f'../data/sketchrnn/{name}/checkpoints/*.hdf5'))[-1]
             sketchrnn.load_weights(checkpoint)
+            strokes = sketchrnn.sample(temperature=temp)
+            normal_strokes = to_normal_strokes(strokes)
 
-            return to_normal_strokes(sketchrnn.sample(temperature=temp)).tolist()
+            return normal_strokes.tolist()

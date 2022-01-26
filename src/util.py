@@ -212,4 +212,5 @@ def to_normal_strokes(big_stroke):
     result = np.zeros((l, 3))
     result[:, 0:2] = big_stroke[0:l, 0:2]
     result[:, 2] = big_stroke[0:l, 3]
+    result[-1, 2] = 1
     return result

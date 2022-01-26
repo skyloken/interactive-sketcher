@@ -6,11 +6,17 @@ class Canvas extends React.Component {
 
     constructor(props) {
         super(props);
+
         this.userLine = [];
         this.userLines = [];
         this.previousSketches = [];
         this.agentLines = [];
         this.isUserTurn = true;
+
+        this.showMessage = true;
+        this.showCategory = true;
+        this.showCompositionCheckbox = false;
+
         this.state = {
             agentMessage: "Agent: Draw your first sketch!",
             isShowComposition: false,
@@ -96,12 +102,22 @@ class Canvas extends React.Component {
             .then(data => {
                 console.log(data);
                 this.previousSketches = data.previousSketches;
-                this.agentLines = data.nextLines;
+                if (data.nextLines.length) {
+                    this.agentLines = data.nextLines;
+                } else {
+                    this.isUserTurn = true
+                }
                 if (this.state.isShowComposition) {
                     this.drawNextSketch(data.nextSketch.name, data.nextSketch.position);
                 }
+                let message = ""
+                if (this.showCategory) {
+                    message = `Agent: I drew ${data.nextSketch.name}, now it's your turn!`
+                } else {
+                    message = `Agent: I drew something, now it's your turn!`
+                }
                 this.setState({
-                    agentMessage: `Agent: I drew ${data.nextSketch.name}, now it's your turn!`
+                    agentMessage: message
                 });
             });
     }
@@ -127,9 +143,9 @@ class Canvas extends React.Component {
     render() {
         return <>
             <Sketch setup={this.setup} draw={this.draw} />
-            <p>{this.state.agentMessage}</p>
+            {this.showMessage && <p>{this.state.agentMessage}</p>}
             <Button variant="contained" onClick={this.handleEndSketchButtonClick}>Next</Button>
-            <Checkbox checked={this.state.isShowComposition} onChange={this.handleCheckboxChange} />
+            {this.showCompositionCheckbox && <Checkbox checked={this.state.isShowComposition} onChange={this.handleCheckboxChange} />}
         </>;
     }
 

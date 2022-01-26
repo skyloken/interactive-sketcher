@@ -7,7 +7,7 @@ function App() {
   return (
     <div className="App">
       <CssBaseline />
-        <Box m="auto">
+        <Box m="auto" mt={10}>
           <Canvas />
         </Box>
     </div>
