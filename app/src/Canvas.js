@@ -13,13 +13,13 @@ class Canvas extends React.Component {
 
         const params = useParams();
         let mode = 1;
-        let param_mode = params.get("mode");
-        if (param_mode) {
-            param_mode = parseInt(param_mode)
-            switch (param_mode) {
+        let paramMode = params.get("mode");
+        if (paramMode) {
+            paramMode = parseInt(paramMode)
+            switch (paramMode) {
                 case 1:
                 case 2:
-                    mode = param_mode;
+                    mode = paramMode;
                     break;
                 default:
                     break;
@@ -214,7 +214,6 @@ class Canvas extends React.Component {
 
     render() {
         return <>
-            <p>mode: {this.mode}</p>
             <p>Current turn: {this.state.turn_num} ({this.state.turn_num % 2 != 0 ? "Your turn" : "Agent's turn"})</p>
             <Sketch setup={this.setup} draw={this.draw} />
             {this.showMessage && <p>{this.state.agentMessage}</p>}
