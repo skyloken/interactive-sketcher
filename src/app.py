@@ -1,9 +1,8 @@
 import datetime
 import json
-import os
 
 import pandas as pd
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, render_template, request
 from waitress import serve
 
 from service import Agent, Sketchformer, SketchRNN
