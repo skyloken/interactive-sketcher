@@ -2,10 +2,29 @@ import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentTe
 import React from "react";
 import Sketch from "react-p5";
 
+function useParams() {
+    return new URLSearchParams(document.location.search.substring(1));
+}
+
 class Canvas extends React.Component {
 
     constructor(props) {
         super(props);
+
+        const params = useParams();
+        let mode = 1;
+        let param_mode = params.get("mode");
+        if (param_mode) {
+            param_mode = parseInt(param_mode)
+            switch (param_mode) {
+                case 1:
+                case 2:
+                    mode = param_mode;
+                    break;
+                default:
+                    break;
+            }
+        }
 
         this.userLine = [];
         this.userLines = [];
@@ -16,7 +35,7 @@ class Canvas extends React.Component {
         this.showMessage = true;
         this.showCategory = true;
         this.showCompositionCheckbox = false;
-        this.mode = 1;
+        this.mode = mode;
 
         this.state = {
             agentMessage: "Agent: Draw your first sketch!",
@@ -195,6 +214,7 @@ class Canvas extends React.Component {
 
     render() {
         return <>
+            <p>mode: {this.mode}</p>
             <p>Current turn: {this.state.turn_num} ({this.state.turn_num % 2 != 0 ? "Your turn" : "Agent's turn"})</p>
             <Sketch setup={this.setup} draw={this.draw} />
             {this.showMessage && <p>{this.state.agentMessage}</p>}
