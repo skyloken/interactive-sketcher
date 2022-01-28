@@ -21,6 +21,7 @@ class Canvas extends React.Component {
         this.state = {
             agentMessage: "Agent: Draw your first sketch!",
             isShowComposition: false,
+            turn_num: 1,
         };
     }
 
@@ -100,7 +101,7 @@ class Canvas extends React.Component {
                 is_rand = false
                 break;
         }
-        
+
         const data = {
             "previousSketches": this.previousSketches,
             "userLines": this.userLines,
@@ -133,6 +134,7 @@ class Canvas extends React.Component {
                     message = `Agent: I drew something, now it's your turn!`
                 }
                 this.setState({
+                    turn_num: this.state.turn_num + 1,
                     agentMessage: message
                 });
             });
@@ -144,6 +146,7 @@ class Canvas extends React.Component {
         }
         this.isUserTurn = false;
         this.setState({
+            turn_num: this.state.turn_num + 1,
             agentMessage: `Agent: I'm thinking, so give me a minute...`
         });
         this.fetchSketch();
@@ -158,6 +161,7 @@ class Canvas extends React.Component {
 
     render() {
         return <>
+            <p>Current turn: {this.state.turn_num} ({this.state.turn_num % 2 != 0 ? "Your turn" : "Agent's turn"})</p>
             <Sketch setup={this.setup} draw={this.draw} />
             {this.showMessage && <p>{this.state.agentMessage}</p>}
             <Button variant="contained" onClick={this.handleEndSketchButtonClick}>Next</Button>
