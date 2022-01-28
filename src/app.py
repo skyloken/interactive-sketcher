@@ -14,13 +14,15 @@ sketchrnn = SketchRNN()
 def draw_next_sketch():
     previous_sketches = request.get_json()["previousSketches"]
     user_lines = request.get_json()["userLines"]
+    is_rand = request.get_json()["is_rand"]
 
     # convert to stroke-3 format
     user_sketch = lines_to_sketch(user_lines)
 
     # next sketch
     inp = sketchformer.preprocess(previous_sketches + [user_sketch])
-    next_sketch = agent.get_next_sketch(inp)
+    next_sketch = agent.get_next_sketch(
+        inp) if not is_rand else agent.get_rand_sketch()
     print(next_sketch)
 
     strokes = sketchrnn.get_random_strokes(next_sketch["name"])

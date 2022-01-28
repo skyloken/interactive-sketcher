@@ -16,6 +16,7 @@ class Canvas extends React.Component {
         this.showMessage = true;
         this.showCategory = true;
         this.showCompositionCheckbox = false;
+        this.mode = 2;
 
         this.state = {
             agentMessage: "Agent: Draw your first sketch!",
@@ -86,9 +87,24 @@ class Canvas extends React.Component {
     };
 
     fetchSketch = () => {
+
+        let is_rand;
+        switch (this.mode) {
+            case 1:
+                is_rand = false;
+                break;
+            case 2:
+                is_rand = true;
+                break;
+            default:
+                is_rand = false
+                break;
+        }
+        
         const data = {
             "previousSketches": this.previousSketches,
             "userLines": this.userLines,
+            "is_rand": is_rand,
         };
 
         fetch("/api/sketch", {

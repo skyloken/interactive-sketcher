@@ -64,6 +64,21 @@ class Agent:
             "position": list(map(int, position.numpy().tolist()))
         }
 
+    def get_rand_sketch(self, min_w=30, min_h=30, max_w=CANVAS_SIZE, max_h=CANVAS_SIZE):
+        c = random.choice(class_names)
+        w = random.randint(min_w, max_w)
+        h = random.randint(min_h, max_h)
+        min_x = w // 2
+        min_y = h // 2
+        max_x = CANVAS_SIZE - min_x
+        max_y = CANVAS_SIZE - min_y
+        x = random.randint(min_x, max_x)
+        y = random.randint(min_y, max_y)
+        return {
+            "name": c,
+            "position": [x, y, w, h]
+        }
+
 
 class Sketchformer:
 
