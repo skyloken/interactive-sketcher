@@ -1,4 +1,4 @@
-import { Button, Checkbox } from "@mui/material";
+import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, Stack } from "@mui/material";
 import React from "react";
 import Sketch from "react-p5";
 
@@ -16,12 +16,13 @@ class Canvas extends React.Component {
         this.showMessage = true;
         this.showCategory = true;
         this.showCompositionCheckbox = false;
-        this.mode = 2;
+        this.mode = 1;
 
         this.state = {
             agentMessage: "Agent: Draw your first sketch!",
             isShowComposition: false,
             turn_num: 1,
+            dialogOpen: false,
         };
     }
 
@@ -52,6 +53,11 @@ class Canvas extends React.Component {
             p5.noFill();
             p5.rect(xmin, ymin, w, h);
         }
+
+        this.clearCanvas = () => {
+            p5.clear();
+            p5.background(230);
+        }
     };
 
     draw = (p5) => {
@@ -61,7 +67,7 @@ class Canvas extends React.Component {
         p5.stroke(0);
         p5.strokeWeight(4);
 
-        if (this.isUserTurn) {
+        if (!this.state.dialogOpen && this.isUserTurn) {
             // User
             if (p5.mouseIsPressed
                 && p5.mouseX <= p5.width && p5.mouseX >= 0
@@ -159,13 +165,60 @@ class Canvas extends React.Component {
         })
     }
 
+    handleResetButtonClick = () => {
+        this.clearCanvas()
+
+        this.userLine = [];
+        this.userLines = [];
+        this.previousSketches = [];
+        this.agentLines = [];
+        this.isUserTurn = true;
+
+        this.setState({
+            agentMessage: "Agent: Draw your first sketch!",
+            turn_num: 1,
+            dialogOpen: false,
+        });
+    }
+
+    handleClickOpen = () => {
+        this.setState({
+            dialogOpen: true,
+        });
+    }
+
+    handleClose = () => {
+        this.setState({
+            dialogOpen: false,
+        });
+    }
+
     render() {
         return <>
             <p>Current turn: {this.state.turn_num} ({this.state.turn_num % 2 != 0 ? "Your turn" : "Agent's turn"})</p>
             <Sketch setup={this.setup} draw={this.draw} />
             {this.showMessage && <p>{this.state.agentMessage}</p>}
-            <Button variant="contained" onClick={this.handleEndSketchButtonClick}>Next</Button>
-            {this.showCompositionCheckbox && <Checkbox checked={this.state.isShowComposition} onChange={this.handleCheckboxChange} />}
+            <Stack spacing={2} direction="row" justifyContent="center">
+                <Button variant="contained" onClick={this.handleEndSketchButtonClick}>Next</Button>
+                <Button variant="contained" color="error" onClick={this.handleClickOpen}>Reset</Button>
+                {this.showCompositionCheckbox && <Checkbox checked={this.state.isShowComposition} onChange={this.handleCheckboxChange} />}
+            </Stack>
+            <Dialog
+                open={this.state.dialogOpen}
+                onClose={this.handleClose}
+                aria-labelledby="alert-dialog-title"
+                aria-describedby="alert-dialog-description"
+            >
+                <DialogContent>
+                    <DialogContentText id="alert-dialog-description">
+                        Do you want to reset this collaborative sketch?
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={this.handleClose}>Cancel</Button>
+                    <Button onClick={this.handleResetButtonClick} color="error" autoFocus>Reset</Button>
+                </DialogActions>
+            </Dialog>
         </>;
     }
 
