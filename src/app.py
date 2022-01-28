@@ -1,3 +1,7 @@
+import datetime
+import json
+
+import pandas as pd
 from flask import Flask, jsonify, request
 
 from service import Agent, Sketchformer, SketchRNN
@@ -10,11 +14,41 @@ sketchformer = Sketchformer()
 sketchrnn = SketchRNN()
 
 
+def save_to_log(seq_id, username, new_sketches, mode):
+
+    log_file = "../data/isketcher/exp_log.csv"
+    log_df = pd.read_csv(log_file, index_col=0)
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+    if seq_id not in log_df.index:
+        # insert
+        row = pd.Series([username, str(mode), timestamp, json.dumps(new_sketches)],
+                        index=log_df.columns, name=seq_id)
+        log_df = log_df.append(row)
+    else:
+        # update
+        sketches = json.loads(log_df.loc[seq_id]["sketches"])
+        row = pd.Series([username, str(mode), timestamp, json.dumps(sketches + new_sketches)],
+                        index=log_df.columns, name=seq_id)
+        log_df.loc[seq_id] = row
+
+    log_df.to_csv(log_file)
+
+
 @app.route("/api/sketch", methods=["POST"])
 def draw_next_sketch():
+    seq_id = request.get_json()["seqId"]
+    username = request.get_json()["username"]
     previous_sketches = request.get_json()["previousSketches"]
     user_lines = request.get_json()["userLines"]
-    is_rand = request.get_json()["is_rand"]
+    mode = request.get_json()["mode"]
+
+    is_rand = False
+    if mode == 1:
+        is_rand = False
+    elif mode == 2:
+        is_rand = True
 
     # convert to stroke-3 format
     user_sketch = lines_to_sketch(user_lines)
@@ -23,7 +57,7 @@ def draw_next_sketch():
     inp = sketchformer.preprocess(previous_sketches + [user_sketch])
     next_sketch = agent.get_next_sketch(
         inp) if not is_rand else agent.get_rand_sketch()
-    print(next_sketch)
+    print("Next sketch:", next_sketch)
 
     strokes = sketchrnn.get_random_strokes(next_sketch["name"])
     agent_sketch = {
@@ -35,8 +69,11 @@ def draw_next_sketch():
     adjusted_lines = adjust_lines(lines, next_sketch["position"])
 
     # predict
-    pred_class = sketchformer.classify([user_sketch["strokes"]])
-    print(pred_class)
+    pred_class = sketchformer.classify([user_sketch["strokes"]])[0]
+    print("Predicted class:", pred_class)
+
+    # save log
+    save_to_log(seq_id, username, [user_lines] + [adjusted_lines], mode)
 
     return jsonify({
         "nextSketch": next_sketch,

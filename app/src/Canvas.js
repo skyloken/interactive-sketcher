@@ -1,6 +1,8 @@
-import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, Stack } from "@mui/material";
+import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, Stack, TextField } from "@mui/material";
 import React from "react";
 import Sketch from "react-p5";
+import { v4 as uuidv4 } from 'uuid';
+
 
 function useParams() {
     return new URLSearchParams(document.location.search.substring(1));
@@ -31,6 +33,7 @@ class Canvas extends React.Component {
         this.previousSketches = [];
         this.agentLines = [];
         this.isUserTurn = true;
+        this.seqId = uuidv4();
 
         this.showMessage = true;
         this.showCategory = true;
@@ -42,6 +45,9 @@ class Canvas extends React.Component {
             isShowComposition: false,
             turn_num: 1,
             dialogOpen: false,
+            formOpen: true,
+            username: "",
+            inputError: false,
         };
     }
 
@@ -86,7 +92,7 @@ class Canvas extends React.Component {
         p5.stroke(0);
         p5.strokeWeight(4);
 
-        if (!this.state.dialogOpen && this.isUserTurn) {
+        if (!this.state.dialogOpen && !this.state.formOpen && this.isUserTurn) {
             // User
             if (p5.mouseIsPressed
                 && p5.mouseX <= p5.width && p5.mouseX >= 0
@@ -114,23 +120,12 @@ class Canvas extends React.Component {
 
     fetchSketch = () => {
 
-        let is_rand;
-        switch (this.mode) {
-            case 1:
-                is_rand = false;
-                break;
-            case 2:
-                is_rand = true;
-                break;
-            default:
-                is_rand = false
-                break;
-        }
-
         const data = {
+            "seqId": this.seqId,
+            "username": this.state.username,
             "previousSketches": this.previousSketches,
             "userLines": this.userLines,
-            "is_rand": is_rand,
+            "mode": this.mode,
         };
 
         fetch("/api/sketch", {
@@ -142,7 +137,6 @@ class Canvas extends React.Component {
         })
             .then(response => response.json())
             .then(data => {
-                console.log(data);
                 this.previousSketches = data.previousSketches;
                 if (data.nextLines.length) {
                     this.agentLines = data.nextLines;
@@ -192,6 +186,7 @@ class Canvas extends React.Component {
         this.previousSketches = [];
         this.agentLines = [];
         this.isUserTurn = true;
+        this.seqId = uuidv4();
 
         this.setState({
             agentMessage: "Agent: Draw your first sketch!",
@@ -212,16 +207,39 @@ class Canvas extends React.Component {
         });
     }
 
+    handleFormClose = () => {
+        if (this.state.username != "") {
+            this.setState({
+                formOpen: false,
+                inputError: false,
+            });
+        } else {
+            this.setState({
+                inputError: true,
+            })
+        }
+    };
+
+    handleNameChange = (e) => {
+        this.setState({
+            username: e.target.value
+        });
+    }
+
     render() {
         return <>
             <p>Current turn: {this.state.turn_num} ({this.state.turn_num % 2 != 0 ? "Your turn" : "Agent's turn"})</p>
+
             <Sketch setup={this.setup} draw={this.draw} />
+
             {this.showMessage && <p>{this.state.agentMessage}</p>}
+
             <Stack spacing={2} direction="row" justifyContent="center">
                 <Button variant="contained" onClick={this.handleEndSketchButtonClick}>Next</Button>
                 <Button variant="contained" color="error" onClick={this.handleClickOpen}>Reset</Button>
                 {this.showCompositionCheckbox && <Checkbox checked={this.state.isShowComposition} onChange={this.handleCheckboxChange} />}
             </Stack>
+
             <Dialog
                 open={this.state.dialogOpen}
                 onClose={this.handleClose}
@@ -234,8 +252,30 @@ class Canvas extends React.Component {
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={this.handleClose}>Cancel</Button>
-                    <Button onClick={this.handleResetButtonClick} color="error" autoFocus>Reset</Button>
+                    <Button variant="outlined" onClick={this.handleClose}>Cancel</Button>
+                    <Button variant="contained" onClick={this.handleResetButtonClick} color="error" autoFocus>Reset</Button>
+                </DialogActions>
+            </Dialog>
+
+            <Dialog open={this.state.formOpen}>
+                <DialogContent>
+                    <DialogContentText>
+                        Please enter your name.
+                    </DialogContentText>
+                    <TextField
+                        required
+                        autoFocus
+                        error={this.state.inputError}
+                        margin="dense"
+                        id="name"
+                        label="Name"
+                        variant="standard"
+                        value={this.state.username}
+                        onChange={this.handleNameChange}
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button variant="contained" onClick={this.handleFormClose}>OK</Button>
                 </DialogActions>
             </Dialog>
         </>;
