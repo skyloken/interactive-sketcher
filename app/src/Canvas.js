@@ -1,19 +1,15 @@
-import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, Stack, TextField } from "@mui/material";
+import { Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Stack, TextField } from "@mui/material";
 import React from "react";
 import Sketch from "react-p5";
 import { v4 as uuidv4 } from 'uuid';
 
-
-function useParams() {
-    return new URLSearchParams(document.location.search.substring(1));
-}
 
 class Canvas extends React.Component {
 
     constructor(props) {
         super(props);
 
-        const params = useParams();
+        const params = new URLSearchParams(document.location.search.substring(1));
         let mode = 1;
         let paramMode = params.get("mode");
         if (paramMode) {
@@ -36,7 +32,7 @@ class Canvas extends React.Component {
         this.seqId = uuidv4();
 
         this.showMessage = true;
-        this.showCategory = true;
+        this.showCategory = false;
         this.showCompositionCheckbox = false;
         this.mode = mode;
 
@@ -208,7 +204,7 @@ class Canvas extends React.Component {
     }
 
     handleFormClose = () => {
-        if (this.state.username != "") {
+        if (this.state.username !== "") {
             this.setState({
                 formOpen: false,
                 inputError: false,
@@ -228,7 +224,7 @@ class Canvas extends React.Component {
 
     render() {
         return <>
-            <p>Current turn: {this.state.turn_num} ({this.state.turn_num % 2 != 0 ? "Your turn" : "Agent's turn"})</p>
+            <p>Current turn: {this.state.turn_num} ({this.state.turn_num % 2 !== 0 ? "Your turn" : "Agent's turn"})</p>
 
             <Sketch setup={this.setup} draw={this.draw} />
 
@@ -258,6 +254,9 @@ class Canvas extends React.Component {
             </Dialog>
 
             <Dialog open={this.state.formOpen}>
+                <DialogTitle id="alert-dialog-title">
+                    Welcome to CoSketcher
+                </DialogTitle>
                 <DialogContent>
                     <DialogContentText>
                         Please enter your name.

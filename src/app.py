@@ -1,13 +1,16 @@
 import datetime
 import json
+import os
 
 import pandas as pd
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request, send_from_directory
+from waitress import serve
 
 from service import Agent, Sketchformer, SketchRNN
 from util import adjust_lines, lines_to_sketch, strokes_to_lines
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="../app/build/static",
+            template_folder="../app/build")
 
 agent = Agent()
 sketchformer = Sketchformer()
@@ -34,6 +37,11 @@ def save_to_log(seq_id, username, new_sketches, mode):
         log_df.loc[seq_id] = row
 
     log_df.to_csv(log_file)
+
+
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 
 @app.route("/api/sketch", methods=["POST"])
@@ -68,10 +76,6 @@ def draw_next_sketch():
     lines = strokes_to_lines(strokes)
     adjusted_lines = adjust_lines(lines, next_sketch["position"])
 
-    # predict
-    pred_class = sketchformer.classify([user_sketch["strokes"]])[0]
-    print("Predicted class:", pred_class)
-
     # save log
     save_to_log(seq_id, username, [user_lines] + [adjusted_lines], mode)
 
@@ -83,4 +87,4 @@ def draw_next_sketch():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    serve(app, host='0.0.0.0', port=3000)
