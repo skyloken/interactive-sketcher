@@ -42,7 +42,7 @@ class Agent:
         ckpt = tf.train.Checkpoint(epoch=tf.Variable(1),
                                    transformer=self.interactive_sketcher)
 
-        checkpoint_path = "../models/isketcher/model_12/checkpoints_2850/"
+        checkpoint_path = "../models/isketcher/model_12/checkpoints_3000/"
         ckpt_manager = tf.train.CheckpointManager(
             ckpt, checkpoint_path, max_to_keep=5)
 

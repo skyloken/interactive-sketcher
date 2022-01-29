@@ -159,7 +159,7 @@ def batch(iterable, n=1):
 def run(run_dir, hparams, dataset):
 
     # hyper parameters
-    EPOCHS = 5000
+    EPOCHS = 3000
     BATCH_SIZE = hparams[HP_BATCH_SIZE]
 
     num_layers = hparams[HP_NUM_LAYERS]
