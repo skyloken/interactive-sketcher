@@ -2,6 +2,7 @@ import glob
 import math
 import random
 import sys
+import time
 
 import numpy as np
 import tensorflow as tf
@@ -104,8 +105,8 @@ class Sketchformer:
 class SketchRNN:
 
     def __init__(self) -> None:
-        self.from_dataset = False
         self.quickdraw = {}
+        self.quickdraw_f = {}
 
         for name in class_names:
             quickdraw_npz = np.load(
@@ -116,9 +117,15 @@ class SketchRNN:
                 "test": quickdraw_npz["test"]
             }
 
-    def get_random_strokes(self, name, temp=0.01):
-        if self.from_dataset:
-            return random.choice(self.quickdraw[name]["test"]).tolist()
+            quickdraw_f_npz = np.load(
+                f'../data/quickdraw_filtered/{name}.npz', encoding='latin1', allow_pickle=True)
+            self.quickdraw_f[name] = quickdraw_f_npz["sketches"]
+
+    def get_random_strokes(self, name, from_dataset=False, temp=0.01):
+
+        if from_dataset:
+            time.sleep(2)
+            return random.choice(self.quickdraw_f[name]).tolist()
         else:
             data = self.quickdraw[name]
             data_train = [dataset.cleanup(d) for d in data['train']]

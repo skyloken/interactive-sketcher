@@ -10,13 +10,15 @@ class Canvas extends React.Component {
         super(props);
 
         const params = new URLSearchParams(document.location.search.substring(1));
-        let mode = 1;
+        let mode = 3;
         let paramMode = params.get("mode");
         if (paramMode) {
             paramMode = parseInt(paramMode)
             switch (paramMode) {
                 case 1:
                 case 2:
+                case 3:
+                case 4:
                     mode = paramMode;
                     break;
                 default:
@@ -32,9 +34,22 @@ class Canvas extends React.Component {
         this.seqId = uuidv4();
 
         this.showMessage = true;
-        this.showCategory = false;
         this.showCompositionCheckbox = false;
         this.mode = mode;
+
+        switch(mode) {
+            case 1:
+            case 2:
+                this.showCategory = false
+                break
+            case 3:
+            case 4:
+                this.showCategory = true
+                break
+            default:
+                this.showCategory = true
+                break
+        }
 
         this.state = {
             agentMessage: "Agent: Draw your first sketch!",
@@ -144,7 +159,7 @@ class Canvas extends React.Component {
                 }
                 let message = ""
                 if (this.showCategory) {
-                    message = `Agent: I drew ${data.nextSketch.name}, now it's your turn!`
+                    message = `Agent: I drew <b>${data.nextSketch.name}</b>, now it's your turn!`
                 } else {
                     message = `Agent: I drew something, now it's your turn!`
                 }
@@ -228,7 +243,7 @@ class Canvas extends React.Component {
 
             <Sketch setup={this.setup} draw={this.draw} />
 
-            {this.showMessage && <p>{this.state.agentMessage}</p>}
+            {this.showMessage && <p><span dangerouslySetInnerHTML={{ __html: this.state.agentMessage }} /></p>}
 
             <Stack spacing={2} direction="row" justifyContent="center">
                 <Button variant="contained" onClick={this.handleEndSketchButtonClick}>Next</Button>
