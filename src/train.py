@@ -35,7 +35,6 @@ METRIC_IOU = 'iou/train'
 METRIC_VAL_IOU = 'iou/valid'
 
 current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-# current_time = "20220115-222828"
 log_dir = f"./logs/{current_time}"
 is_restore = True
 
